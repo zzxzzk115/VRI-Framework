@@ -1,0 +1,3 @@
+# Vendored single-header (septag/dds-ktx, BSD-2) - never reformat.
+DisableFormat: true
+SortIncludes: false

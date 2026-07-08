@@ -23,5 +23,9 @@ CMakeLists.txt
 vs20*/
 vsxmake*/
 
-# clangd
-*.clangd
+# clangd: the root .clangd is generated (the clangd.config rule copies it from
+# .clangd.win/.clangd.nowin).
+/.clangd
+
+# Repo-local clang-format provisioned by scripts/setup-hooks (pinned to CI's 20.1.0).
+scripts/.cf-venv/

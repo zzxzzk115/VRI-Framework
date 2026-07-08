@@ -1,0 +1,4 @@
+# Generated shader blobs (mesh_vshlib.h is a byte array cooked by vshaderc) - not hand-written,
+# so exempt from formatting. The .slang source is authored by hand but clang-format ignores it.
+DisableFormat: true
+SortIncludes: false

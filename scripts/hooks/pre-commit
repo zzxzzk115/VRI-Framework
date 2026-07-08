@@ -1,0 +1,56 @@
+#!/bin/sh
+# VRI-Framework pre-commit hook: run clang-format's CI check on the STAGED C/C++ files under
+# source/ examples/ tests/ and block the commit on any violation - so a formatting
+# slip never reaches CI. Same command CI runs (clang-format --dry-run --Werror).
+#
+# One-time setup (enables the hook + provisions the pinned clang-format locally):
+#     scripts/setup-hooks.sh        # or  scripts\setup-hooks.ps1  on Windows
+# Bypass for a single commit:
+#     git commit --no-verify
+set -eu
+
+# Staged, still-present files in the CI-checked trees with a C/C++ extension.
+files=$(git diff --cached --name-only --diff-filter=ACMR \
+        | grep -E '^(source|examples|tests)/.*\.(cpp|cc|h|hpp)$' || true)
+[ -z "$files" ] && exit 0
+
+# Resolve clang-format: $CLANG_FORMAT override, else the repo-provisioned venv
+# (scripts/setup-hooks), else PATH. If none is found we SKIP (never block a commit) -
+# CI stays the backstop, and the message says how to enable the local check.
+cf="${CLANG_FORMAT:-}"
+if [ -z "$cf" ]; then
+    for c in scripts/.cf-venv/bin/clang-format \
+             scripts/.cf-venv/Lib/site-packages/clang_format/data/bin/clang-format.exe \
+             scripts/.cf-venv/Scripts/clang-format.exe; do
+        [ -x "$c" ] && { cf="$c"; break; }
+    done
+fi
+if [ -z "$cf" ] && command -v clang-format >/dev/null 2>&1; then
+    cf="clang-format"
+fi
+if [ -z "$cf" ]; then
+    echo "pre-commit: no clang-format found - skipping the format check (CI still enforces it)." >&2
+    echo "            Provision the pinned version once:  scripts/setup-hooks.sh" >&2
+    exit 0
+fi
+
+ver=$("$cf" --version | sed -n 's/.*version \([0-9]\{1,\}\).*/\1/p')
+if [ "${ver:-0}" != "20" ]; then
+    echo "pre-commit: warning: clang-format ${ver:-?} in use; CI pins 20.1.0 (results may differ)." >&2
+fi
+
+bad=""
+for f in $files; do
+    "$cf" --dry-run --Werror "$f" >/dev/null 2>&1 || bad="$bad $f"
+done
+
+if [ -n "$bad" ]; then
+    echo "pre-commit: clang-format violations in:" >&2
+    for f in $bad; do echo "    $f" >&2; done
+    echo "" >&2
+    echo "  fix:      scripts/check-format.sh --fix   (or: clang-format -i$bad )" >&2
+    echo "  re-stage: git add$bad" >&2
+    echo "  bypass:   git commit --no-verify" >&2
+    exit 1
+fi
+exit 0

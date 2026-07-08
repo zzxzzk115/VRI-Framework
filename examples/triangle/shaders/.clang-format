@@ -1,0 +1,4 @@
+# Generated shader blobs (triangle_spv.h is a byte array from slangc) - not hand-written, so
+# exempt from formatting. The .slang source is authored by hand but clang-format ignores it.
+DisableFormat: true
+SortIncludes: false

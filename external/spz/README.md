@@ -1,0 +1,238 @@
+# spz
+
+`.spz` is a file format for compressed 3D gaussian splats. This directory contains a C++ library
+for saving and loading data in the .spz format.
+
+spz encoded splats are typically around 10x smaller than the corresponding .ply files,
+with minimal visual differences between the two.
+
+## Internals
+
+### Coordinate System
+
+SPZ stores data internally in an RUB coordinate system following the OpenGL and three.js
+convention. This differs from other data formats such as PLY (which typically uses RDF), GLB (which
+typically uses LUF), or Unity (which typically uses RUF). To aid with coordinate system conversions,
+callers should specify the coordinate system their Gaussian Cloud data is represented in when saving
+and what coordinate system their rendering system uses when loading. These are specified in the
+PackOptions and UnpackOptions respectively.  If the coordinate system is `UNSPECIFIED`, data will
+be saved and loaded without conversion, which may harm interoperability.
+
+## Implementations
+
+### C++
+
+Requires `libz` as the only dependent library, otherwise the code is completely self-contained.
+A CMake build system is provided for convenience.
+
+**Note:** If `libz` is not found on the system, the CMake build system will automatically download zlib version 1.3.1 using FetchContent. This ensures consistent builds across different environments.
+
+### Typescript
+
+To build the Typescript interface through Web-Assembly (WASM), an Emscripten environment needs to be setup before compilation. One may install the Emscripten SDK following the instructions [here](https://emscripten.org/docs/getting_started/downloads.html).
+
+Under an emscripten environment, the Makefile can be generated through:
+```
+emcmake cmake -B build-wasm .
+```
+Then one can build through
+```
+cmake --build build-wasm
+```
+The package will be built and installed into the `dist` folder.
+
+
+## API
+
+### C++
+
+```
+bool saveSpz(
+   const GaussianCloud &gaussians, const PackOptions &options, std::vector<uint8_t> *output);
+```
+
+Converts a cloud of Gaussians to `.spz` format and writes the result to a vector of bytes.
+
+   - `gaussians`: The Gaussians to save
+   - `options`: Flags that control the packing behavior, including SH quantization parameters.
+   - `output`: A vector that will be populated with bytes encoded in .spz format
+   - Returns true on success and false on failure.
+
+---
+
+```
+bool saveSpz(
+   const GaussianCloud &gaussians, const PackOptions &options, const std::string
+&filename);
+```
+
+Saves a cloud of Gaussians in `.spz` format to a file
+
+   - `gaussians`: The Gaussians to save
+   - `options`: Flags that control the packing behavior, including SH quantization parameters.
+   - `filename`: The path to the file to save to.
+   - Returns true on success and false on failure.
+
+---
+
+```
+GaussianCloud loadSpz(const std::vector<uint8_t> &data, const UnpackOptions &opti
+ons);
+```
+
+Loads a cloud of Gaussians from bytes in `.spz` format.
+
+   - `data`: A vector containing the encoded spz data
+   - `options`: Flags that control the unpacking behavior.
+   - Returns a `GaussianCloud` decoded from the vector. In case of an error, this will return
+     a result with no gaussians
+
+---
+
+```
+GaussianCloud loadSpz(const std::string &filename, const UnpackOptions &options);
+```
+
+Loads a cloud of Gaussians from a file in `.spz` format.
+
+   - `filename`: The path to the file to load from.
+   - `options`: Flags that control the unpacking behavior.
+   - Returns a `GaussianCloud` decoded from the file. In case of an error, this will return
+     a result with no gaussians
+
+### Typescript
+
+Check [src/emscripten/spz.d.ts.in](src/emscripten/spz.d.ts.in) (source) or `dist/spz.d.ts` (after building with CMake) for the TypeScript interface. Since the Emscripten and Javascript memory are separately handled, we only expose limited functionalities for the Typescript interface.
+
+### PackOptions
+
+The `PackOptions` struct supports the following fields:
+
+- `from`: Source coordinate system (default: `UNSPECIFIED`)
+- `version`: Version of the packed format (default: `4`)
+- `sh1Bits`: Number of quantization bits for SH degree 1 coefficients (default: 5, range: 1-8)
+- `shRestBits`: Number of quantization bits for SH degree 2+ coefficients (default: 4, range: 1-8)
+
+## File Format
+
+The .spz format is a gzipped stream of data consisting of a 16-byte header followed by the
+gaussian data. This data is organized by attribute in the following order: positions,
+alphas, colors, scales, rotations, spherical harmonics.
+
+### Header
+
+**Version 4 (current):**
+```c
+struct PackedGaussiansHeader {
+  uint32_t magic;
+  uint32_t version;
+  uint32_t numPoints;
+  uint8_t shDegree;
+  uint8_t fractionalBits;
+  uint8_t flags;
+  uint8_t reserved;
+};
+```
+
+All values are little-endian.
+
+1. **magic**: This is always 0x5053474e
+2. **version**: Valid versions are 1, 2, 3, and 4 (version 4 is current).
+3. **numPoints**: The number of gaussians
+4. **shDegree**: The degree of spherical harmonics. This must be between 0 and 4 (inclusive).
+5. **fractionalBits**: The number of bits used to store the fractional part of coordinates in
+   the fixed-point encoding.
+6. **flags**: A bit field containing flags.
+   - `0x1`: whether the splat was trained with [antialiasing](https://niujinshuchong.github.io/mip-splatting/).
+   - `0x2`: whether the stream contains vendor-specific extensions after the gaussian data.
+7. **reserved**: Reserved for future use. Must be 0.
+
+### Positions
+
+Positions are represented as `(x, y, z)` coordinates, each as a 24-bit fixed point signed integer.
+The number of fractional bits is determined by the `fractionalBits` field in the header.
+
+### Scales
+
+Scales are represented as `(x, y, z)` components, each represented as an 8-bit log-encoded integer.
+
+### Rotation
+
+In version 3 and 4, rotations are represented as the smallest three components of the normalized rotation quaternion, for optimal rotation accuracy.
+The largest component can be derived from the others and is not stored. Its index is stored on 2 bits
+and each of the smallest three components is encoded as a 10-bit signed integer.
+
+In version 2, rotations are represented as the `(x, y, z)` components of the normalized rotation quaternion. The
+`w` component can be derived from the others and is not stored. Each component is encoded as an
+8-bit signed integer.
+
+### Alphas
+
+Alphas are represented as 8-bit unsigned integers.
+
+### Colors
+
+Colors are stored as `(r, g, b)` values, where each color component is represented as an
+unsigned 8-bit integer.
+
+### Spherical Harmonics
+
+Depending on the degree of spherical harmonics for the splat, this can contain 0 (for degree 0),
+9 (for degree 1), 24 (for degree 2), 45 (for degree 3), or 72 (for degree 4) coefficients per gaussian.
+
+The coefficients for a gaussian are organized such that the color channel is the inner (faster
+varying) axis, and the coefficient is the outer (slower varying) axis, i.e. for degree 1,
+the order of the 9 values is:
+
+```
+sh1n1_r, sh1n1_g, sh1n1_b, sh10_r, sh10_g, sh10_b, sh1p1_r, sh1p1_g, sh1p1_b
+```
+
+Each coefficient is represented as an 8-bit signed integer.
+
+**Quantization:**
+
+SPZ supports configurable spherical harmonics quantization. By default, a fixed-precision quantization is adopted:
+- Assumes SH coefficients are in the [-1, 1] range
+- Fixed 5 bits of precision for degree 1 and 4 bits for degrees 2, 3, and 4
+- Maintained for backward compatibility
+
+The quantization precision can be configured via `PackOptions`:
+- `sh1Bits`: Number of quantization bits for SH degree 1 coefficients (default: 5, range: 1-8)
+- `shRestBits`: Number of quantization bits for SH degree 2+ coefficients (default: 4, range: 1-8)
+
+**Note:** Quantization bits are only used during packing to reduce information entropy for better g-zipping compression. The unpacking process does not need to know the exact quantization bits, as g-unzipping already fills zero bits for quantized data.
+
+This allows users to trade off between file size and quality. The library maintains full backward compatibility with default quantization settings.
+
+### Extensions
+
+SPZ supports vendor-specific extensions (e.g. camera limits) so multiple vendors can coexist in the same file. The extension stream uses a per-record length so unknown types are skipped. For the extension format and how to add or use extensions, see [extensions/README.md](extensions/README.md).
+
+### Camera Orbit Limitation
+
+With extension `SPZ_ADOBE_safe_orbit_camera`, SPZ supports storing camera limits which can be used to restrict the view in a render. This extension includes:
+
+**Attributes**
+
+This extension has the following attributes and default values:
+
+```
+  float safeOrbitElevationMin = 0.0f;  // Minimum elevation for safe orbit (radians)
+  float safeOrbitElevationMax = 0.0f;  // Maximum elevation for safe orbit (radians)
+  float safeOrbitRadiusMin = 0.0f;     // Minimum radius for safe orbit
+```
+
+
+## Python Bindings
+
+The SPZ library provides Python bindings built with [nanobind](https://nanobind.readthedocs.io/) that offer a convenient interface for loading, manipulating, and saving 3D Gaussian splats from Python.
+
+### Installation
+```bash
+git clone https://github.com/nianticlabs/spz.git
+cd spz
+pip install .
+```
+
+Please see src/python/README.md for more details and usage examples
