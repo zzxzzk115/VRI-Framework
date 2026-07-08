@@ -1,0 +1,138 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Enforce clang-format over source/ examples/ tests/ (the root .clang-format). Pinned to
+  # 20.1.0 so CI and local `scripts/check-format` agree exactly. Vendored external/ (GaussForge,
+  # spz) and generated shader headers (their own DisableFormat .clang-format) are exempt.
+  format:
+    name: clang-format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install clang-format 20.1.0
+        run: pip install clang-format==20.1.0
+      - name: Check formatting (source/ examples/ tests/)
+        run: |
+          files=$(git ls-files source examples tests | grep -E '\.(cpp|cc|h|hpp)$')
+          echo "$files" | xargs clang-format --dry-run --Werror
+
+  # Build the vrf library (all loaders + shader-variant runtime + both window backends) and run
+  # the doctest suite. GPU-upload cases self-skip without a device; on Linux we install Mesa's
+  # lavapipe so Vulkan actually renders headless under Xvfb. examples are off in CI (the model
+  # picker would pull GTK on Linux) - the library + suite are the gate.
+  desktop:
+    name: desktop (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        with:
+          vulkan-query-version: latest
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: true
+
+      - name: Install Linux deps (windowing + software Vulkan + headless X)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            xorg-dev libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libgl1-mesa-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols \
+            mesa-vulkan-drivers libgl1-mesa-dri xvfb
+
+      # Toolset 14.29 matches a vshadersystem prebuilt tier, so its runtime loader resolves as a
+      # prebuilt instead of a source build.
+      - name: Setup MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+          toolset: 14.29
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+          actions-cache-folder: ".xmake-cache"
+          build-cache: true
+
+      - name: Configure
+        run: >-
+          xmake f -y -m release
+          -p ${{ runner.os == 'Windows' && 'windows' || 'linux' }}
+          ${{ runner.os == 'Windows' && '-a x64 --vs=2022 --vs_toolset=14.29' || '' }}
+          --vrf_build_examples=n --vrf_build_tests=y --policies=build.ccache:y
+
+      - name: Build
+        run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y vrf-tests
+
+      - name: Test (Linux, headless via Xvfb + lavapipe)
+        if: runner.os == 'Linux'
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+        run: xvfb-run -a xmake run vrf-tests
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        run: xmake run vrf-tests
+
+      - name: Show install error log
+        if: failure()
+        shell: bash
+        run: |
+          find "$HOME/.xmake" -name install.txt -exec echo "==== {} ====" \; -exec cat {} \; || true
+
+  # macOS: build + run gate (separate job - macos-latest is arm64). GPU backends self-skip without
+  # a MoltenVK ICD.
+  macos:
+    name: desktop (macos-latest)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Vulkan SDK
+        uses: humbletim/setup-vulkan-sdk@v1.2.1
+        with:
+          vulkan-query-version: latest
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: true
+
+      - name: Setup xmake
+        uses: xmake-io/github-action-setup-xmake@v1
+        with:
+          xmake-version: latest
+          actions-cache-folder: ".xmake-cache"
+          build-cache: true
+
+      - name: Configure
+        run: xmake f -y -m release -p macosx --vrf_build_examples=n --vrf_build_tests=y --policies=build.ccache:y
+
+      - name: Build
+        run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y vrf-tests
+
+      - name: Test (backends self-skip without a MoltenVK ICD)
+        run: xmake run vrf-tests
+
+      - name: Show install error log
+        if: failure()
+        run: |
+          find "$HOME/.xmake" -name install.txt -exec echo "==== {} ====" \; -exec cat {} \; || true
