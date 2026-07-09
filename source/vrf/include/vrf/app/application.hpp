@@ -22,17 +22,18 @@ namespace vrf
 {
     struct ApplicationDesc
     {
-        std::string    title         = "vrf";
-        Extent2D       extent        = {1280, 720};
-        WindowBackend  windowBackend = WindowBackend::Auto;
-        GraphicsApi    api           = GraphicsApi::Auto;
-        bool           validation    = true;
-        VriFormat      colorFormat   = VriFormat_BGRA8_UNORM;
-        VriFormat      depthFormat   = VriFormat_Unknown;
-        VriPresentMode presentMode   = VriPresentMode_Fifo;
-        float          clearColor[4] = {0.08f, 0.10f, 0.14f, 1.0f};
-        float          clearDepth    = 1.0f;
-        bool           imgui         = false; // enable the Dear ImGui integration (needs VRF_WITH_IMGUI)
+        std::string    title           = "vrf";
+        Extent2D       extent          = {1280, 720};
+        WindowBackend  windowBackend   = WindowBackend::Auto;
+        GraphicsApi    api             = GraphicsApi::Auto;
+        bool           validation      = true;
+        uint64_t       enabledFeatures = 0; // opt-in VriFeatureBits to request (best-effort; see VriFeature_*)
+        VriFormat      colorFormat     = VriFormat_BGRA8_UNORM;
+        VriFormat      depthFormat     = VriFormat_Unknown;
+        VriPresentMode presentMode     = VriPresentMode_Fifo;
+        float          clearColor[4]   = {0.08f, 0.10f, 0.14f, 1.0f};
+        float          clearDepth      = 1.0f;
+        bool           imgui           = false; // enable the Dear ImGui integration (needs VRF_WITH_IMGUI)
     };
 
     class Application

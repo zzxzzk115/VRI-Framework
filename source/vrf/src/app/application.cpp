@@ -52,20 +52,21 @@ namespace vrf
             return std::unexpected(window.error());
 
         RenderModuleDesc moduleDesc;
-        moduleDesc.api           = ResolveApi(desc.api);
-        moduleDesc.validation    = desc.validation;
-        moduleDesc.enableImGui   = desc.imgui;
-        moduleDesc.window        = (*window)->Handle();
-        moduleDesc.nativeDisplay = (*window)->NativeDisplay();
-        moduleDesc.extent        = (*window)->Extent();
-        moduleDesc.colorFormat   = desc.colorFormat;
-        moduleDesc.depthFormat   = desc.depthFormat;
-        moduleDesc.presentMode   = desc.presentMode;
-        moduleDesc.clearColor[0] = desc.clearColor[0];
-        moduleDesc.clearColor[1] = desc.clearColor[1];
-        moduleDesc.clearColor[2] = desc.clearColor[2];
-        moduleDesc.clearColor[3] = desc.clearColor[3];
-        moduleDesc.clearDepth    = desc.clearDepth;
+        moduleDesc.api             = ResolveApi(desc.api);
+        moduleDesc.enabledFeatures = desc.enabledFeatures;
+        moduleDesc.validation      = desc.validation;
+        moduleDesc.enableImGui     = desc.imgui;
+        moduleDesc.window          = (*window)->Handle();
+        moduleDesc.nativeDisplay   = (*window)->NativeDisplay();
+        moduleDesc.extent          = (*window)->Extent();
+        moduleDesc.colorFormat     = desc.colorFormat;
+        moduleDesc.depthFormat     = desc.depthFormat;
+        moduleDesc.presentMode     = desc.presentMode;
+        moduleDesc.clearColor[0]   = desc.clearColor[0];
+        moduleDesc.clearColor[1]   = desc.clearColor[1];
+        moduleDesc.clearColor[2]   = desc.clearColor[2];
+        moduleDesc.clearColor[3]   = desc.clearColor[3];
+        moduleDesc.clearDepth      = desc.clearDepth;
 
         auto module = RenderModule::Create(moduleDesc);
         if (!module)
