@@ -3,7 +3,10 @@
 #include <cstdint>
 #include <cstring>
 #include <string>
+#include <utility>
 #include <vector>
+
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "vrf/core/log.hpp"
 
@@ -166,6 +169,37 @@ namespace vrf
             if (textureIndex < 0 || textureIndex >= static_cast<int>(model.textures.size()))
                 return -1;
             return model.textures[textureIndex].source;
+        }
+
+        // A glTF node's LOCAL transform: either an explicit column-major 4x4 matrix, or the
+        // T * R * S composition. (A node has one or the other, never both.)
+        glm::mat4 NodeLocalMatrix(const tinygltf::Node& node)
+        {
+            if (node.matrix.size() == 16)
+            {
+                glm::mat4 m(1.0f);
+                for (int col = 0; col < 4; ++col)
+                    for (int row = 0; row < 4; ++row)
+                        m[col][row] = static_cast<float>(node.matrix[static_cast<size_t>(col) * 4 + row]);
+                return m;
+            }
+            glm::mat4 m(1.0f);
+            if (node.translation.size() == 3)
+                m = glm::translate(m,
+                                   glm::vec3(static_cast<float>(node.translation[0]),
+                                             static_cast<float>(node.translation[1]),
+                                             static_cast<float>(node.translation[2])));
+            if (node.rotation.size() == 4) // glTF stores the quaternion as (x, y, z, w); glm::quat is (w, x, y, z)
+                m = m * glm::mat4_cast(glm::quat(static_cast<float>(node.rotation[3]),
+                                                 static_cast<float>(node.rotation[0]),
+                                                 static_cast<float>(node.rotation[1]),
+                                                 static_cast<float>(node.rotation[2])));
+            if (node.scale.size() == 3)
+                m = glm::scale(m,
+                               glm::vec3(static_cast<float>(node.scale[0]),
+                                         static_cast<float>(node.scale[1]),
+                                         static_cast<float>(node.scale[2])));
+            return m;
         }
 
         // Flatten one glTF extension Value tree into a typed MaterialExtension (lossless for
@@ -431,9 +465,18 @@ namespace vrf
         if (useColor)
             out.attributes |= VertexAttribute::Color;
 
-        // ---- primitives ----
-        for (const tinygltf::Mesh& gmesh : model.meshes)
-        {
+        // ---- primitives, baked by node world transform ----
+        // glTF places meshes through the node graph (each node a TRS/matrix, hierarchical), so a
+        // mesh's vertices are in LOCAL space. Bake the node's world transform into them, or every
+        // submesh collapses to its own local origin - multi-node models come apart and a mesh placed
+        // (or scaled) by a node transform, e.g. the Khronos Duck, ends up mislocated. Positions go
+        // through the world matrix; normals/tangents through its normal (inverse-transpose) matrix.
+        const auto processMesh = [&](int meshIndex, const glm::mat4& world) {
+            if (meshIndex < 0 || meshIndex >= static_cast<int>(model.meshes.size()))
+                return;
+            const glm::mat3       normalMat = glm::mat3(glm::transpose(glm::inverse(world)));
+            const glm::mat3       linear    = glm::mat3(world); // tangents transform by the plain 3x3
+            const tinygltf::Mesh& gmesh     = model.meshes[meshIndex];
             for (const tinygltf::Primitive& prim : gmesh.primitives)
             {
                 if (prim.mode != TINYGLTF_MODE_TRIANGLES)
@@ -447,7 +490,11 @@ namespace vrf
                 const size_t   vertexCount  = positions.size() / 3;
                 const uint32_t vertexOffset = out.VertexCount();
                 for (size_t i = 0; i < vertexCount; ++i)
-                    out.positions.emplace_back(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2]);
+                {
+                    const glm::vec4 p =
+                        world * glm::vec4(positions[i * 3 + 0], positions[i * 3 + 1], positions[i * 3 + 2], 1.0f);
+                    out.positions.emplace_back(p.x, p.y, p.z);
+                }
 
                 if (useNormal)
                 {
@@ -456,7 +503,12 @@ namespace vrf
                         std::vector<float> data;
                         ReadAccessorFloats(model, it->second, data);
                         for (size_t i = 0; i < vertexCount; ++i)
-                            out.normals.emplace_back(data[i * 3 + 0], data[i * 3 + 1], data[i * 3 + 2]);
+                        {
+                            glm::vec3   n   = normalMat * glm::vec3(data[i * 3 + 0], data[i * 3 + 1], data[i * 3 + 2]);
+                            const float len = glm::length(n);
+                            n               = len > 0.0f ? n / len : glm::vec3(0.0f);
+                            out.normals.emplace_back(n.x, n.y, n.z);
+                        }
                     }
                     else
                         out.normals.resize(out.normals.size() + vertexCount, Normal(0.0f, 0.0f, 0.0f));
@@ -468,8 +520,12 @@ namespace vrf
                         std::vector<float> data;
                         ReadAccessorFloats(model, it->second, data);
                         for (size_t i = 0; i < vertexCount; ++i)
-                            out.tangents.emplace_back(
-                                data[i * 4 + 0], data[i * 4 + 1], data[i * 4 + 2], data[i * 4 + 3]);
+                        {
+                            glm::vec3   t   = linear * glm::vec3(data[i * 4 + 0], data[i * 4 + 1], data[i * 4 + 2]);
+                            const float len = glm::length(t);
+                            t               = len > 0.0f ? t / len : glm::vec3(0.0f);
+                            out.tangents.emplace_back(t.x, t.y, t.z, data[i * 4 + 3]); // handedness (w) preserved
+                        }
                     }
                     else
                         out.tangents.resize(out.tangents.size() + vertexCount, Tangent(0.0f, 0.0f, 0.0f, 1.0f));
@@ -524,6 +580,51 @@ namespace vrf
                 sub.indexCount    = out.IndexCount() - indexOffset;
                 sub.materialIndex = prim.material;
                 out.subMeshes.push_back(std::move(sub));
+            }
+        };
+
+        if (model.nodes.empty())
+        {
+            // No scene graph (rare): bake every mesh at identity.
+            for (int m = 0; m < static_cast<int>(model.meshes.size()); ++m)
+                processMesh(m, glm::mat4(1.0f));
+        }
+        else
+        {
+            std::vector<int> roots;
+            if (!model.scenes.empty())
+            {
+                const int sceneIndex =
+                    (model.defaultScene >= 0 && model.defaultScene < static_cast<int>(model.scenes.size())) ?
+                        model.defaultScene :
+                        0;
+                roots = model.scenes[sceneIndex].nodes;
+            }
+            if (roots.empty()) // no scene declared: treat every node as a root
+                for (int i = 0; i < static_cast<int>(model.nodes.size()); ++i)
+                    roots.push_back(i);
+
+            // Iterative DFS accumulating world = parent * local; guard against cycles.
+            std::vector<std::pair<int, glm::mat4>> stack;
+            for (int r : roots)
+                stack.emplace_back(r, glm::mat4(1.0f));
+            std::vector<bool> visited(model.nodes.size(), false);
+            while (!stack.empty())
+            {
+                const int       nodeIndex   = stack.back().first;
+                const glm::mat4 parentWorld = stack.back().second;
+                stack.pop_back();
+                if (nodeIndex < 0 || nodeIndex >= static_cast<int>(model.nodes.size()) || visited[nodeIndex])
+                    continue;
+                visited[nodeIndex]          = true;
+                const tinygltf::Node& node  = model.nodes[nodeIndex];
+                const glm::mat4       world = parentWorld * NodeLocalMatrix(node);
+                if (node.mesh >= 0)
+                    // A skinned mesh ignores its node transform per spec (joints define it); we don't
+                    // skin, so bake the bind pose at identity rather than double-applying the node.
+                    processMesh(node.mesh, node.skin >= 0 ? glm::mat4(1.0f) : world);
+                for (int child : node.children)
+                    stack.emplace_back(child, world);
             }
         }
 
