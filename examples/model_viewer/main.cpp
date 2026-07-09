@@ -180,21 +180,8 @@ int main(int argc, char** argv)
 #if defined(VRF_WITH_IMGUI)
     desc.imgui = true;
 #endif
-    if (const char* api = std::getenv("VRF_API"))
-    {
-        const std::string_view a = api;
-        if (a == "vulkan")
-            desc.api = vrf::GraphicsApi::Vulkan;
-        else if (a == "d3d12" || a == "dx12")
-            desc.api = vrf::GraphicsApi::D3D12;
-        else if (a == "webgpu" || a == "wgpu")
-            desc.api = vrf::GraphicsApi::WebGPU;
-        else if (a == "opengl" || a == "gl")
-            desc.api = vrf::GraphicsApi::OpenGL;
-        else if (a == "metal")
-            desc.api = vrf::GraphicsApi::Metal;
-    }
-
+    // Backend selection (VRI_API=vulkan|d3d12|opengl|metal|webgpu, else Auto) is handled by
+    // vrf::Application, matching VRI's own convention - no per-example parsing needed.
     auto appResult = vrf::Application::Create(desc);
     if (!appResult)
     {
