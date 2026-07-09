@@ -29,7 +29,11 @@
 #include <nfd.hpp>
 #endif
 
-#include "shaders/mesh_vshlib.h"
+// The cooked shader variant library (shaders/mesh.vshlib) is embedded at build time by xmake's
+// utils.bin2c rule (see xmake.lua) - no committed byte-array header.
+static const unsigned char g_meshVshlib[] = {
+#include "mesh.vshlib.h"
+};
 
 namespace
 {
@@ -267,7 +271,9 @@ int main(int argc, char** argv)
     addRange(6, VriDescriptorType_Sampler);
 
     auto layoutResult = vrf::PipelineLayoutBuilder {}
-                            .AddPushConstant(0, sizeof(PushConstants), VriShaderStage_Vertex | VriShaderStage_Fragment)
+                            // register b1: the material CBV pins b0, so Slang puts the push
+                            // constant at b1 on D3D12 (ignored for Vulkan, which has no push register).
+                            .AddPushConstant(1, sizeof(PushConstants), VriShaderStage_Vertex | VriShaderStage_Fragment)
                             .AddDescriptorSet(0, ranges)
                             .Build(device);
     if (!layoutResult)
@@ -338,12 +344,20 @@ int main(int argc, char** argv)
             status = "shader variant failed: " + (vs ? fs.error().message : vs.error().message);
             return;
         }
-        vrf::ShaderVariants vsv {};
-        vsv.spirv     = vs->spirv;
-        vsv.spirvSize = vs->spirvSize;
-        vrf::ShaderVariants fsv {};
-        fsv.spirv     = fs->spirv;
-        fsv.spirvSize = fs->spirvSize;
+        // Feed every backend blob the variant carries; the builder picks per active API. D3D12
+        // uses DXBC (SM5.1) - VRI reflects vertex input via D3DReflect, which reads DXBC.
+        const auto toVariants = [](const vrf::ResolvedShader& r) {
+            vrf::ShaderVariants v {};
+            v.spirv     = r.spirv;
+            v.spirvSize = r.spirvSize;
+            v.wgsl      = r.wgsl;
+            v.wgslSize  = r.wgslSize;
+            v.d3d12     = r.dxbc;
+            v.d3d12Size = r.dxbcSize;
+            return v;
+        };
+        const vrf::ShaderVariants vsv = toVariants(*vs);
+        const vrf::ShaderVariants fsv = toVariants(*fs);
 
         auto pipelineResult = vrf::GraphicsPipelineBuilder {}
                                   .SetPipelineLayout(layout)

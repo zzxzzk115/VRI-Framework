@@ -44,13 +44,18 @@ namespace vrf
     };
 
     // A resolved variant's bytecode. Pointers are owned by the ShaderLibrary and stay valid
-    // for its lifetime; feed them into a ShaderVariants for the pipeline builder.
+    // for its lifetime; feed them into a ShaderVariants for the pipeline builder. Any target may
+    // be null if the library wasn't cooked (or was stripped) for it.
     struct ResolvedShader
     {
         const void* spirv     = nullptr;
         size_t      spirvSize = 0; // bytes
         const void* wgsl      = nullptr;
-        size_t      wgslSize  = 0; // bytes (0 if the library was cooked with --no-wgsl)
+        size_t      wgslSize  = 0; // bytes
+        const void* dxbc      = nullptr;
+        size_t      dxbcSize  = 0; // bytes (Direct3D 12, SM5.1)
+        const void* dxil      = nullptr;
+        size_t      dxilSize  = 0; // bytes (Direct3D 12, SM6.0)
         std::string entryPoint;    // pipeline entry-point name baked into the variant
     };
 
