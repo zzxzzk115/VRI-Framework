@@ -63,6 +63,9 @@ namespace vrf
 
         [[nodiscard]] virtual const char* Title() const = 0;
 
+        // Set the OS window title bar text (e.g. vrf::Application appends the resolved backend).
+        virtual void SetTitle(const char* title) = 0;
+
         // Optional Dear ImGui platform integration (input + per-frame). No-ops unless the
         // window backend wires them (built with VRF_WITH_IMGUI). Init returns false if
         // unavailable. Driven by vrf::Application when its ApplicationDesc::imgui is set.

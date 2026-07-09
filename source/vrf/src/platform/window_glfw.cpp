@@ -48,6 +48,11 @@ namespace vrf
             WindowBackend Backend() const override { return WindowBackend::GLFW; }
             bool          ShouldClose() const override { return glfwWindowShouldClose(m_window) != 0; }
             const char*   Title() const override { return m_title.c_str(); }
+            void          SetTitle(const char* title) override
+            {
+                m_title = title ? title : "";
+                glfwSetWindowTitle(m_window, m_title.c_str());
+            }
 
             void PollEvents() override { glfwPollEvents(); }
 

@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <string>
 #include <utility>
 
 #if defined(VRF_WITH_IMGUI)
@@ -45,6 +46,19 @@ namespace vrf
         app->m_desc   = desc;
         app->m_window = std::move(*window);
         app->m_module = std::move(*module);
+
+        // Reflect the resolved backend (+ API version) in the title bar, e.g. "vrf (Vulkan 1.4)".
+        {
+            const RenderDevice& device = app->m_module->Device();
+            std::string         title(desc.title);
+            title += " (";
+            title += device.ApiName();
+            if (const VriDeviceDesc* dd = device.Desc();
+                dd != nullptr && (dd->apiVersionMajor != 0 || dd->apiVersionMinor != 0))
+                title += " " + std::to_string(dd->apiVersionMajor) + "." + std::to_string(dd->apiVersionMinor);
+            title += ")";
+            app->m_window->SetTitle(title.c_str());
+        }
 
 #if defined(VRF_WITH_IMGUI)
         if (desc.imgui)
