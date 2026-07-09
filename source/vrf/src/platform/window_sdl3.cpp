@@ -46,6 +46,11 @@ namespace vrf
             WindowBackend Backend() const override { return WindowBackend::SDL3; }
             bool          ShouldClose() const override { return m_shouldClose; }
             const char*   Title() const override { return m_title.c_str(); }
+            void          SetTitle(const char* title) override
+            {
+                m_title = title ? title : "";
+                SDL_SetWindowTitle(m_window, m_title.c_str());
+            }
 
 #if defined(VRF_WITH_IMGUI)
             bool InitImGui() override
