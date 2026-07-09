@@ -94,6 +94,32 @@ namespace
             texture[kTexOcclusion]         = m->occlusionTexture.index;
             texture[kTexNormal]            = m->normalTexture.index;
         }
+        else if (const auto* m = material.As<vrf::UnlitMaterial>())
+        {
+            // Unlit (e.g. KHR_materials_unlit, common in FBX->glTF exports): only a base color +
+            // its texture. Route it through the base-color slot as a matte surface so it shows.
+            ubo.baseColorFactor    = m->color;
+            ubo.factors            = {0.0f, 1.0f, 1.0f, material.alphaCutoff};
+            ubo.emissiveFactor     = glm::vec4(0.0f);
+            texture[kTexBaseColor] = m->colorTexture.index;
+        }
+        else if (const auto* m = material.As<vrf::PbrSpecularGlossinessMaterial>())
+        {
+            ubo.baseColorFactor    = m->diffuseFactor;
+            ubo.factors            = {0.0f, 1.0f - m->glossinessFactor, 1.0f, material.alphaCutoff};
+            ubo.emissiveFactor     = glm::vec4(0.0f);
+            texture[kTexBaseColor] = m->diffuseTexture.index;
+            texture[kTexNormal]    = m->normalTexture.index;
+        }
+        else if (const auto* m = material.As<vrf::PhongMaterial>())
+        {
+            ubo.baseColorFactor    = m->diffuse;
+            ubo.factors            = {0.0f, 0.8f, 1.0f, material.alphaCutoff};
+            ubo.emissiveFactor     = glm::vec4(m->emissive, 0.0f);
+            texture[kTexBaseColor] = m->diffuseTexture.index;
+            texture[kTexNormal]    = m->normalTexture.index;
+            texture[kTexEmissive]  = m->emissiveTexture.index;
+        }
         else
         {
             ubo.baseColorFactor = BaseColorOf(material);
