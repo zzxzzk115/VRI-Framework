@@ -79,11 +79,9 @@ struct VSOutput
 
 struct PushConstants
 {
-    float4x4 mvp; // clip-space transform (column-major: matches glm; vshaderc >= 1.0.1 defaults column-major)
-    float4   modelCol0;  // model 3x3 column 0 (xyz) + translation.x (w)
-    float4   modelCol1;  // column 1 (xyz) + translation.y (w)
-    float4   modelCol2;  // column 2 (xyz) + translation.z (w)
-    float4   camera;     // camera position (xyz) + debug-view mode (w, cast to int)
+    float4x4 mvp;    // clip-space transform (column-major, matches glm)
+    float4x4 model;  // world transform (column-major, matches glm)
+    float4   camera; // camera position (xyz) + debug-view mode (w, cast to int)
 };
 
 // Debug views (camera.w): 0 = full PBR, then unlit channel previews.
@@ -118,20 +116,16 @@ struct MaterialUBO
 VSOutput vertexMain(VSInput input)
 {
     VSOutput o;
-    o.clipPos = mul(pc.mvp, float4(input.position, 1.0));
+    o.clipPos  = mul(pc.mvp, float4(input.position, 1.0));
+    o.worldPos = mul(pc.model, float4(input.position, 1.0)).xyz;
 
-    // model columns dotted with the vertex components (column-major; avoids ctor conventions)
-    const float3 worldRotPos = pc.modelCol0.xyz * input.position.x + pc.modelCol1.xyz * input.position.y +
-                               pc.modelCol2.xyz * input.position.z;
-    o.worldPos = worldRotPos + float3(pc.modelCol0.w, pc.modelCol1.w, pc.modelCol2.w);
+    // model is rigid / uniformly scaled here, so its upper 3x3 transforms normals + tangents.
+    const float3x3 normalMat = (float3x3)pc.model;
 #if VTX_HAS_NORMAL
-    o.normal = pc.modelCol0.xyz * input.normal.x + pc.modelCol1.xyz * input.normal.y +
-               pc.modelCol2.xyz * input.normal.z;
+    o.normal = mul(normalMat, input.normal);
 #endif
 #if VTX_HAS_TANGENT
-    const float3 worldTangent = pc.modelCol0.xyz * input.tangent.x + pc.modelCol1.xyz * input.tangent.y +
-                                pc.modelCol2.xyz * input.tangent.z;
-    o.tangent = float4(worldTangent, input.tangent.w);
+    o.tangent = float4(mul(normalMat, input.tangent.xyz), input.tangent.w);
 #endif
 #if VTX_HAS_UV0
     o.texCoord = input.texCoord;

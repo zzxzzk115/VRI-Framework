@@ -39,13 +39,11 @@ namespace
 {
     struct PushConstants
     {
-        glm::mat4 mvp;
-        glm::vec4 modelCol0; // model 3x3 column 0 (xyz) + translation.x (w)
-        glm::vec4 modelCol1;
-        glm::vec4 modelCol2;
+        glm::mat4 mvp;    // clip-space transform
+        glm::mat4 model;  // world transform
         glm::vec4 camera; // camera position (xyz) + debug-view mode (w)
     };
-    static_assert(sizeof(PushConstants) == 128, "push constant layout must match the shader");
+    static_assert(sizeof(PushConstants) == 144, "push constant layout must match the shader");
 
     // Matches the shader's MaterialUBO (std140: three vec4s).
     struct MaterialUBO
@@ -502,11 +500,9 @@ int main(int argc, char** argv)
         const glm::mat4 proj  = glm::perspective(glm::radians(45.0f), aspect, nearZ, farZ);
 
         PushConstants push {};
-        push.mvp       = proj * view * model;
-        push.modelCol0 = glm::vec4(glm::vec3(model[0]), model[3].x);
-        push.modelCol1 = glm::vec4(glm::vec3(model[1]), model[3].y);
-        push.modelCol2 = glm::vec4(glm::vec3(model[2]), model[3].z);
-        push.camera    = glm::vec4(eye, static_cast<float>(debugMode)); // debug view mode in .w
+        push.mvp    = proj * view * model;
+        push.model  = model;
+        push.camera = glm::vec4(eye, static_cast<float>(debugMode)); // debug view mode in .w
 
         c.CmdSetPipelineLayout(cmd, layout);
         c.CmdSetPipeline(cmd, scene.pipeline);
