@@ -180,6 +180,11 @@ int main(int argc, char** argv)
 #if defined(VRF_WITH_IMGUI)
     desc.imgui = true;
 #endif
+    // Request every optional feature best-effort so the startup capability dump
+    // (vrf::DescribeDevice) reports what the GPU/backend actually supports.
+    desc.enabledFeatures = VriFeature_RayTracing | VriFeature_RayQuery | VriFeature_MeshShader | VriFeature_Bindless |
+                           VriFeature_VariableShadingRate | VriFeature_OpacityMicromap | VriFeature_ExternalMemory |
+                           VriFeature_LowLatency;
     // Backend selection (VRI_API=vulkan|d3d12|opengl|metal|webgpu, else Auto) is handled by
     // vrf::Application, matching VRI's own convention - no per-example parsing needed.
     auto appResult = vrf::Application::Create(desc);
@@ -568,7 +573,7 @@ int main(int argc, char** argv)
     };
 #endif
 
-    std::printf("[vrf-model-viewer] running on %s\n", device.ApiName());
+    std::printf("[vrf-model-viewer] %s\n", vrf::DescribeDevice(device).c_str());
     app.Run();
 
     device.WaitIdle();

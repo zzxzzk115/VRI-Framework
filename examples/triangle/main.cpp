@@ -17,6 +17,11 @@ int main()
     vrf::ApplicationDesc desc;
     desc.title  = "vrf triangle";
     desc.extent = {960, 540};
+    // Request every optional feature best-effort. The triangle doesn't use them, but it makes the
+    // startup capability dump (vrf::DescribeDevice) report what the GPU/backend actually supports.
+    desc.enabledFeatures = VriFeature_RayTracing | VriFeature_RayQuery | VriFeature_MeshShader | VriFeature_Bindless |
+                           VriFeature_VariableShadingRate | VriFeature_OpacityMicromap | VriFeature_ExternalMemory |
+                           VriFeature_LowLatency;
 
     // VRF_WINDOW=glfw|sdl3 overrides the window backend (default Auto -> SDL3).
     if (const char* backend = std::getenv("VRF_WINDOW"))
@@ -71,7 +76,7 @@ int main()
         c.CmdDraw(cmd, &draw);
     };
 
-    std::printf("[vrf-triangle] running on %s\n", device.ApiName());
+    std::printf("[vrf-triangle] %s\n", vrf::DescribeDevice(device).c_str());
     app.Run();
 
     const VriCoreInterface& c = device.Core();

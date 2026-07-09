@@ -13,6 +13,7 @@
 #include "vrf/gpu/builders/graphics_pipeline_builder.hpp"
 #include "vrf/gpu/builders/pipeline_layout_builder.hpp"
 #include "vrf/gpu/builders/texture_builder.hpp"
+#include "vrf/gpu/device_info.hpp"
 #include "vrf/gpu/frame.hpp"
 #include "vrf/gpu/render_device.hpp"
 #include "vrf/gpu/render_module.hpp"
