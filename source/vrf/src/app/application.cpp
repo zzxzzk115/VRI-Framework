@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <string>
 #include <utility>
 
@@ -11,6 +12,34 @@
 
 namespace vrf
 {
+    namespace
+    {
+        // Backend selection follows VRI's own convention (examples/common/example_app.h): the
+        // VRI_API env var (vulkan|d3d12|opengl|metal|webgpu) forces a backend, and anything else
+        // - including unset - leaves it to VriGraphicsAPI_Auto. Reusing VRI's env-var name (rather
+        // than a parallel one) keeps the framework consistent with VRI for anyone who knows it.
+        // Only consulted when the caller left desc.api as Auto, so explicit code always wins.
+        GraphicsApi ResolveApi(GraphicsApi requested)
+        {
+            if (requested != GraphicsApi::Auto)
+                return requested;
+            const char* env = std::getenv("VRI_API");
+            if (env == nullptr)
+                return GraphicsApi::Auto;
+            if (std::strcmp(env, "vulkan") == 0)
+                return GraphicsApi::Vulkan;
+            if (std::strcmp(env, "d3d12") == 0 || std::strcmp(env, "dx12") == 0)
+                return GraphicsApi::D3D12;
+            if (std::strcmp(env, "opengl") == 0 || std::strcmp(env, "gl") == 0)
+                return GraphicsApi::OpenGL;
+            if (std::strcmp(env, "metal") == 0)
+                return GraphicsApi::Metal;
+            if (std::strcmp(env, "webgpu") == 0 || std::strcmp(env, "wgpu") == 0)
+                return GraphicsApi::WebGPU;
+            return GraphicsApi::Auto;
+        }
+    } // namespace
+
     Expected<std::unique_ptr<Application>> Application::Create(const ApplicationDesc& desc)
     {
         WindowDesc windowDesc;
@@ -23,7 +52,7 @@ namespace vrf
             return std::unexpected(window.error());
 
         RenderModuleDesc moduleDesc;
-        moduleDesc.api           = desc.api;
+        moduleDesc.api           = ResolveApi(desc.api);
         moduleDesc.validation    = desc.validation;
         moduleDesc.enableImGui   = desc.imgui;
         moduleDesc.window        = (*window)->Handle();

@@ -78,7 +78,7 @@ Run the model viewer on a model (or a procedural cube with no argument):
 ```sh
 xmake run vrf_example_model_viewer path/to/model.gltf   # or .glb / .obj
 VRF_WINDOW=glfw xmake run vrf_example_model_viewer       # pick the window backend
-VRF_API=vulkan  xmake run vrf_example_model_viewer       # pick the VRI backend
+VRI_API=vulkan  xmake run vrf_example_model_viewer       # pick the VRI backend (VRI's own env var)
 ```
 
 ## License
