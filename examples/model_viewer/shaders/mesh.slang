@@ -103,7 +103,10 @@ struct MaterialUBO
     float4 factors;        // x=metallic, y=roughness, z=occlusionStrength, w=alphaCutoff
     float4 emissiveFactor; // xyz
 };
-[[vk::binding(0, 0)]] ConstantBuffer<MaterialUBO> uMaterial;
+// Pin the D3D12 register to b0 so the push constant (which Slang otherwise puts at b0) moves to
+// b1, matching the pipeline layout - two root parameters at b0 fail D3D12SerializeRootSignature.
+// [[vk::binding]] still drives the Vulkan (SPIR-V) binding independently.
+[[vk::binding(0, 0)]] ConstantBuffer<MaterialUBO> uMaterial : register(b0, space0);
 [[vk::binding(1, 0)]] Texture2D uBaseColor;
 [[vk::binding(2, 0)]] Texture2D uMetallicRoughness;
 [[vk::binding(3, 0)]] Texture2D uEmissive;
