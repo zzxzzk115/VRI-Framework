@@ -177,6 +177,16 @@ rule("vulkansdk")
                 return
             end
 
+            -- Linux: the loader must resolve vk* symbols from the vri PACKAGE (libvri.a), which
+            -- appear LATE in the link line. A full-path link placed before those package libs is
+            -- dropped by ld's default --as-needed -> undefined vk* refs. Add it as a trailing
+            -- syslink (+ linkdir) instead, which xmake emits after the package libs.
+            if target:is_plat("linux") then
+                target:add("linkdirs", vulkansdk.linkdirs[1], { public = true })
+                target:add("syslinks", util, { public = true })
+                return
+            end
+
             local lib_name = target:is_plat("windows") and util or "lib" .. util
             local lib_path = path.join(vulkansdk.linkdirs[1], lib_name .. suffix)
             target:add("links", lib_path, { public = true })
