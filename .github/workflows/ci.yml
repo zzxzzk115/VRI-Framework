@@ -58,14 +58,14 @@ jobs:
             libgl1-mesa-dev libglu1-mesa-dev libwayland-dev libxkbcommon-dev wayland-protocols \
             mesa-vulkan-drivers libgl1-mesa-dri xvfb
 
-      # Toolset 14.29 matches a vshadersystem prebuilt tier, so its runtime loader resolves as a
-      # prebuilt instead of a source build.
+      # Toolset 14.44 matches a vshadersystem prebuilt tier (so its runtime loader resolves as a
+      # prebuilt, not a source build) AND has C++23 <expected> (MSVC 19.44); 14.29 lacks <expected>.
       - name: Setup MSVC (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
-          toolset: 14.29
+          toolset: 14.44
 
       - name: Setup xmake
         uses: xmake-io/github-action-setup-xmake@v1
@@ -78,7 +78,7 @@ jobs:
         run: >-
           xmake f -y -m release
           -p ${{ runner.os == 'Windows' && 'windows' || 'linux' }}
-          ${{ runner.os == 'Windows' && '-a x64 --vs=2022 --vs_toolset=14.29' || '' }}
+          ${{ runner.os == 'Windows' && '-a x64 --vs_toolset=14.44' || '' }}
           --vrf_build_examples=n --vrf_build_tests=y --policies=build.ccache:y
 
       - name: Build
