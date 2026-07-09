@@ -83,10 +83,13 @@ namespace
     {
         for (int i = 0; i < kTextureSlotCount; ++i)
             texture[i] = -1;
+        // factors.w carries the alpha cutoff for MASK materials, or a negative sentinel otherwise -
+        // the shader discards below the cutoff only when it is >= 0 (so OPAQUE/BLEND never mask).
+        const float maskCutoff = material.alphaMode == vrf::AlphaMode::Mask ? material.alphaCutoff : -1.0f;
         if (const auto* m = material.As<vrf::PbrMetallicRoughnessMaterial>())
         {
             ubo.baseColorFactor            = m->baseColorFactor;
-            ubo.factors                    = {m->metallicFactor, m->roughnessFactor, 1.0f, material.alphaCutoff};
+            ubo.factors                    = {m->metallicFactor, m->roughnessFactor, 1.0f, maskCutoff};
             ubo.emissiveFactor             = glm::vec4(m->emissiveFactor, 0.0f);
             texture[kTexBaseColor]         = m->baseColorTexture.index;
             texture[kTexMetallicRoughness] = m->metallicRoughnessTexture.index;
@@ -99,14 +102,14 @@ namespace
             // Unlit (e.g. KHR_materials_unlit, common in FBX->glTF exports): only a base color +
             // its texture. Route it through the base-color slot as a matte surface so it shows.
             ubo.baseColorFactor    = m->color;
-            ubo.factors            = {0.0f, 1.0f, 1.0f, material.alphaCutoff};
+            ubo.factors            = {0.0f, 1.0f, 1.0f, maskCutoff};
             ubo.emissiveFactor     = glm::vec4(0.0f);
             texture[kTexBaseColor] = m->colorTexture.index;
         }
         else if (const auto* m = material.As<vrf::PbrSpecularGlossinessMaterial>())
         {
             ubo.baseColorFactor    = m->diffuseFactor;
-            ubo.factors            = {0.0f, 1.0f - m->glossinessFactor, 1.0f, material.alphaCutoff};
+            ubo.factors            = {0.0f, 1.0f - m->glossinessFactor, 1.0f, maskCutoff};
             ubo.emissiveFactor     = glm::vec4(0.0f);
             texture[kTexBaseColor] = m->diffuseTexture.index;
             texture[kTexNormal]    = m->normalTexture.index;
@@ -114,7 +117,7 @@ namespace
         else if (const auto* m = material.As<vrf::PhongMaterial>())
         {
             ubo.baseColorFactor    = m->diffuse;
-            ubo.factors            = {0.0f, 0.8f, 1.0f, material.alphaCutoff};
+            ubo.factors            = {0.0f, 0.8f, 1.0f, maskCutoff};
             ubo.emissiveFactor     = glm::vec4(m->emissive, 0.0f);
             texture[kTexBaseColor] = m->diffuseTexture.index;
             texture[kTexNormal]    = m->normalTexture.index;
@@ -123,7 +126,7 @@ namespace
         else
         {
             ubo.baseColorFactor = BaseColorOf(material);
-            ubo.factors         = {0.0f, 0.8f, 1.0f, material.alphaCutoff};
+            ubo.factors         = {0.0f, 0.8f, 1.0f, maskCutoff};
             ubo.emissiveFactor  = glm::vec4(0.0f);
         }
     }
@@ -426,7 +429,7 @@ int main(int argc, char** argv)
             else
             {
                 ubo.baseColorFactor = glm::vec4(0.8f, 0.8f, 0.8f, 1.0f);
-                ubo.factors         = {0.0f, 0.7f, 1.0f, 0.5f};
+                ubo.factors         = {0.0f, 0.7f, 1.0f, -1.0f}; // w<0: no alpha masking on the default material
                 ubo.emissiveFactor  = glm::vec4(0.0f);
                 for (int t = 0; t < kTextureSlotCount; ++t)
                     texture[t] = -1;

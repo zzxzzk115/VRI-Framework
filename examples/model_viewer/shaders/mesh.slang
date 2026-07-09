@@ -182,6 +182,12 @@ float4 fragmentMain(VSOutput input) : SV_Target
     const float3 emiSample  = float3(1.0, 1.0, 1.0);
 #endif
 
+    // Alpha masking (glTF alphaMode = MASK): discard fragments below the cutoff. factors.w carries
+    // the cutoff for masked materials, or a negative sentinel when the material is OPAQUE / BLEND.
+    const float baseAlpha = baseSample.a * uMaterial.baseColorFactor.a;
+    if (uMaterial.factors.w >= 0.0 && baseAlpha < uMaterial.factors.w)
+        discard;
+
     // Base color (glTF baseColor textures are sRGB; approximate the decode to linear).
     float3 albedo = pow(baseSample.rgb, 2.2) * uMaterial.baseColorFactor.rgb;
 #if VTX_HAS_COLOR
@@ -254,5 +260,5 @@ float4 fragmentMain(VSOutput input) : SV_Target
 
     color = color / (color + float3(1.0, 1.0, 1.0)); // Reinhard tonemap
     color = pow(color, 1.0 / 2.2);                   // linear -> sRGB for the UNORM target
-    return float4(color, baseSample.a * uMaterial.baseColorFactor.a);
+    return float4(color, baseAlpha);
 }
