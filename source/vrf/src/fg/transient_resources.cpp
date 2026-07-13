@@ -109,15 +109,14 @@ namespace vrf::fg
     {
         auto& group = m_textures.entryGroups[hashDesc(desc)];
 
-        // Only reuse entries the GPU is guaranteed done with.
-        for (auto it = group.begin(); it != group.end(); ++it)
+        // Device-local textures are only touched by GPU commands on one queue;
+        // barriers order cross-frame reuse, so pooled entries are reusable
+        // immediately.
+        if (!group.empty())
         {
-            if (m_frame - it->releasedAt >= m_framesInFlight - 1)
-            {
-                auto* texture = it->resource;
-                group.erase(it);
-                return texture;
-            }
+            auto* texture = group.back().resource;
+            group.pop_back();
+            return texture;
         }
 
         auto created = Texture::Create(m_device, desc);
@@ -140,9 +139,15 @@ namespace vrf::fg
         assert(desc.dataSize() > 0);
         auto& group = m_buffers.entryGroups[hashDesc(desc)];
 
+        // Host-visible buffers (uniforms) are map-written by the CPU, which
+        // races the GPU still reading the previous frame - hold them back a
+        // full frames-in-flight window. Device-local buffers are ordered by
+        // barriers like textures.
+        const bool     hostVisible = desc.type == BufferType::UniformBuffer;
+        const uint64_t minAge      = hostVisible ? m_framesInFlight : 0;
         for (auto it = group.begin(); it != group.end(); ++it)
         {
-            if (m_frame - it->releasedAt >= m_framesInFlight - 1)
+            if (m_frame - it->releasedAt >= minAge)
             {
                 auto* buffer = it->resource;
                 group.erase(it);
