@@ -14,6 +14,11 @@ add_requires("vri v0.1.4", {configs = vri_configs})
 -- glm: math types used across the framework's public API.
 add_requires("glm")
 
+-- fg (skaarj1989/FrameGraph): the graph core under the vrf::fg framegraph module.
+-- Passes declare create/read/write; fg culls, orders, and drives the transient
+-- pool + barrier hooks (vrf/fg/*). Public - pass code includes <fg/FrameGraph.hpp>.
+add_requires("fg")
+
 -- vshadersystem: runtime shader-variant loader (a cooked .vshlib -> SPIR-V/WGSL per variant),
 -- so shaders can be keyed by mesh vertex attributes (VTX_HAS_*). Prebuilt per platform; the
 -- runtime loader links spirv-cross/glslang/xxhash and is confined to the framework's .cpp.

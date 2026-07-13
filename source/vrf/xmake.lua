@@ -16,6 +16,10 @@ target("vrf")
     -- backends are compiled into this static lib and reference SDL3 / GLFW symbols).
     add_packages("vri", "glm", {public = true})
 
+    -- The framegraph module's graph core; public because pass code includes
+    -- <fg/FrameGraph.hpp> / <fg/Blackboard.hpp> directly.
+    add_packages("fg", {public = true})
+
     -- Loader implementations: single-header libs compiled into this static lib, so
     -- they are private (consumers don't need them). dds-ktx is vendored in src/.
     add_packages("stb", "tinyobjloader", "tinygltf")
