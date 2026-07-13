@@ -1,5 +1,6 @@
 #include "vrf/gpu/shader_library.hpp"
 
+#include <fstream>
 #include <unordered_map>
 
 #include <vshadersystem/shader_id.hpp>
@@ -21,8 +22,24 @@ namespace vrf
                     return vsh::ShaderStage::eVert;
                 case ShaderStage::Fragment:
                     return vsh::ShaderStage::eFrag;
+                case ShaderStage::Geometry:
+                    return vsh::ShaderStage::eGeom;
                 case ShaderStage::Compute:
                     return vsh::ShaderStage::eComp;
+                case ShaderStage::Task:
+                    return vsh::ShaderStage::eTask;
+                case ShaderStage::Mesh:
+                    return vsh::ShaderStage::eMesh;
+                case ShaderStage::RayGen:
+                    return vsh::ShaderStage::eRgen;
+                case ShaderStage::Miss:
+                    return vsh::ShaderStage::eRmiss;
+                case ShaderStage::ClosestHit:
+                    return vsh::ShaderStage::eRchit;
+                case ShaderStage::AnyHit:
+                    return vsh::ShaderStage::eRahit;
+                case ShaderStage::Intersection:
+                    return vsh::ShaderStage::eRint;
             }
             return MakeError(VriResult_InvalidArgument, "ShaderLibrary: unknown shader stage");
         }
@@ -101,6 +118,21 @@ namespace vrf
         ShaderLibrary out;
         out.m_impl = std::move(impl);
         return out;
+    }
+
+    Expected<ShaderLibrary> ShaderLibrary::LoadFromFile(const std::string& path)
+    {
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file)
+            return MakeError(VriResult_Failure, "ShaderLibrary::LoadFromFile: cannot open " + path);
+
+        const auto size = static_cast<size_t>(file.tellg());
+        file.seekg(0, std::ios::beg);
+        std::vector<char> data(size);
+        if (!file.read(data.data(), static_cast<std::streamsize>(size)))
+            return MakeError(VriResult_Failure, "ShaderLibrary::LoadFromFile: read failed for " + path);
+
+        return LoadFromMemory(data.data(), data.size());
     }
 
     Expected<ResolvedShader> ShaderLibrary::Resolve(std::string_view                  shaderId,

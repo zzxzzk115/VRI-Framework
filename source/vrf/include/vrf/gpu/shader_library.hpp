@@ -40,7 +40,15 @@ namespace vrf
     {
         Vertex,
         Fragment,
+        Geometry,
         Compute,
+        Task,
+        Mesh,
+        RayGen,
+        Miss,
+        ClosestHit,
+        AnyHit,
+        Intersection,
     };
 
     // A resolved variant's bytecode. Pointers are owned by the ShaderLibrary and stay valid
@@ -78,6 +86,9 @@ namespace vrf
         // Load a cooked .vshlib from memory (e.g. an embedded byte array). All variants are
         // decoded up front, so Resolve is a pure lookup afterwards.
         [[nodiscard]] static Expected<ShaderLibrary> LoadFromMemory(const void* data, size_t size);
+
+        // Load a cooked .vshlib shipped as a runtime asset file.
+        [[nodiscard]] static Expected<ShaderLibrary> LoadFromFile(const std::string& path);
 
         // Resolve one stage of a shader for the given keyword values. `shaderId` is the path the
         // shader was cooked under, relative to --shader_root, without the .slang extension and with
