@@ -23,7 +23,7 @@
 #include <vrf/fg/transient_resources.hpp>
 #include <vrf/gpu/builders/graphics_pipeline_builder.hpp>
 #include <vrf/gpu/builders/pipeline_layout_builder.hpp>
-#include <vrf/gpu/frame.hpp>
+#include <vrf/gpu/frame_stream.hpp>
 #include <vrf/gpu/render_device.hpp>
 #include <vrf/gpu/shader_library.hpp>
 #include <vrf/gpu/swapchain.hpp>
@@ -149,13 +149,15 @@ int main()
     }
     vrf::Swapchain& swapchain = *swapResult;
 
-    auto frameResult = vrf::Frame::Create(device);
+    constexpr uint32_t kFramesInFlight = 2;
+
+    auto frameResult = vrf::FrameStream::Create(device, kFramesInFlight);
     if (!frameResult)
     {
-        std::fprintf(stderr, "[framegraph-deferred] frame: %s\n", frameResult.error().message.c_str());
+        std::fprintf(stderr, "[framegraph-deferred] frame stream: %s\n", frameResult.error().message.c_str());
         return 1;
     }
-    vrf::Frame frame = std::move(*frameResult);
+    vrf::FrameStream frames = std::move(*frameResult);
 
     // ---- shaders ----------------------------------------------------------
     auto libResult = vrf::ShaderLibrary::LoadFromMemory(g_deferredVshlib, sizeof(g_deferredVshlib));
@@ -167,9 +169,15 @@ int main()
     vrf::ShaderLibrary shaders = std::move(*libResult);
 
     // ---- framegraph services ----------------------------------------------
-    vrf::fg::TransientResources  transientResources {device};
-    vrf::fg::DescriptorAllocator descriptorAllocator {device};
-    vrf::fg::Samplers            samplers;
+    vrf::fg::TransientResources transientResources {device, kFramesInFlight};
+    // One descriptor allocator per frame slot: sets from frame N-1 are still
+    // consumed by the GPU while the CPU records frame N.
+    std::vector<vrf::fg::DescriptorAllocator> descriptorAllocators;
+    for (uint32_t i = 0; i < kFramesInFlight; ++i)
+    {
+        descriptorAllocators.emplace_back(device);
+    }
+    vrf::fg::Samplers samplers;
 
     {
         VriSamplerDesc samplerDesc {};
@@ -283,11 +291,14 @@ int main()
             continue;
         }
 
-        VriCommandBuffer* cmd = frame.Begin();
+        // Begin() waited for this slot's previous frame, so its descriptor pools
+        // are safe to recycle now.
+        VriCommandBuffer* cmd            = frames.Begin();
+        auto&             slotAllocator = descriptorAllocators[frames.FrameIndex()];
 
         transientResources.update();
-        descriptorAllocator.Reset();
-        vrf::fg::RenderContext renderContext {device, cmd, samplers, descriptorAllocator};
+        slotAllocator.Reset();
+        vrf::fg::RenderContext renderContext {device, cmd, samplers, slotAllocator};
 
         const float seconds =
             std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
@@ -411,7 +422,7 @@ int main()
         renderContext.TransitionTexture(backbuffers[acquired.index],
                                         {VriAccess_None, VriLayout_Present, VriPipelineStage_AllCommands});
 
-        frame.Submit();
+        frames.Submit(); // no CPU wait - next iteration records while this frame draws
         swapchain.Present();
         ++frameCount;
 
