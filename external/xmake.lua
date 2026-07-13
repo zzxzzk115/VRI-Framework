@@ -56,6 +56,11 @@ if has_config("vrf_with_openxr") then
     add_requires("vulkan-headers 1.4.335")
 end
 
+-- Tracy profiler (opt-in): CPU zones via vrf/core/profiling.hpp (VRF_ZONE).
+if has_config("vrf_with_tracy") then
+    add_requires("tracy")
+end
+
 -- Window backends (an abstract Window with SDL3 and/or GLFW implementations).
 if has_config("vrf_window_sdl3") then
     add_requires("libsdl3") -- NOTE: the package is named "libsdl3", not "sdl3"
