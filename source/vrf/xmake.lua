@@ -61,6 +61,13 @@ target("vrf")
         add_packages("openxr", "vulkan-headers", {public = true})
     end
 
+    -- Optional Tracy zones (vrf/core/profiling.hpp). Public so app code can use
+    -- VRF_ZONE and connect with the same client.
+    if has_config("vrf_with_tracy") then
+        add_defines("VRF_WITH_TRACY", "TRACY_ENABLE", {public = true})
+        add_packages("tracy", {public = true})
+    end
+
     -- Link the Vulkan loader from the installed SDK (see the vulkansdk rule in the
     -- top-level xmake.lua). Public so the loader is linked into dependent binaries.
     if has_config("vrf_backend_vulkan") then

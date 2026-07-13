@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "vrf/core/profiling.hpp"
 #include "vrf/gpu/render_device.hpp"
 
 namespace vrf
@@ -76,6 +77,7 @@ namespace vrf
 
     VriCommandBuffer* FrameStream::Begin()
     {
+        VRF_ZONE("FrameStream::Begin");
         const VriCoreInterface& c    = m_device->Core();
         Slot&                   slot = m_slots[m_slotIndex];
 
@@ -83,6 +85,7 @@ namespace vrf
         // framesInFlight-1 frames stay in flight.
         if (slot.submittedValue != 0)
         {
+            VRF_ZONE("FrameStream::WaitSlot");
             c.Wait(m_fence, slot.submittedValue);
         }
 
@@ -93,6 +96,8 @@ namespace vrf
 
     void FrameStream::Submit()
     {
+        VRF_ZONE("FrameStream::Submit");
+        VRF_FRAME_MARK();
         const VriCoreInterface& c    = m_device->Core();
         Slot&                   slot = m_slots[m_slotIndex];
 
