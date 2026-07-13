@@ -49,6 +49,13 @@ if has_config("vrf_loader_draco") then
     add_requires("draco")
 end
 
+-- OpenXR loader for vrf::xr (opt-in). vulkan-headers only for the Vulkan types in the
+-- OpenXR<->Vulkan binding structs (no Vulkan functions are called from vrf).
+if has_config("vrf_with_openxr") then
+    add_requires("openxr")
+    add_requires("vulkan-headers 1.4.335")
+end
+
 -- Window backends (an abstract Window with SDL3 and/or GLFW implementations).
 if has_config("vrf_window_sdl3") then
     add_requires("libsdl3") -- NOTE: the package is named "libsdl3", not "sdl3"

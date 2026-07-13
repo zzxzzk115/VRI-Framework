@@ -112,6 +112,7 @@ namespace vrf
         desc.outputMerger.colors             = m_colorAttachments.empty() ? nullptr : m_colorAttachments.data();
         desc.outputMerger.colorNum           = static_cast<uint32_t>(m_colorAttachments.size());
         desc.outputMerger.depthStencilFormat = m_depthStencilFormat;
+        desc.outputMerger.viewMask           = m_viewMask;
 
         VriPipeline*    pipeline = nullptr;
         const VriResult r        = device.Core().CreateGraphicsPipeline(device.Handle(), &desc, &pipeline);

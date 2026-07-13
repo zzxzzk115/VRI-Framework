@@ -54,6 +54,16 @@ option("vrf_with_imgui")
     set_description("Enable the Dear ImGui integration")
 option_end()
 
+-- Optional OpenXR support (vrf::xr): XrSystem device-creation probe + XrSession stereo rig
+-- over VRI's interop extension (XR_KHR_vulkan_enable2 + wrapped swapchain images). The
+-- OpenXR-free parts of vrf::xr (StereoRig, SimStereoRig - desktop stereo emulation) are
+-- always built. Vulkan backend only.
+option("vrf_with_openxr")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable OpenXR support (vrf::xr XrSystem/XrSession; needs the Vulkan backend)")
+option_end()
+
 -- Optional Draco mesh decompression for the glTF loader (KHR_draco_mesh_compression),
 -- via tinygltf's built-in draco integration. Opt-in so the default build stays minimal.
 option("vrf_loader_draco")

@@ -122,6 +122,7 @@ namespace vrf
         dd.bestEffort        = VRI_TRUE;
         dd.enabledFeatures   = desc.enabledFeatures;
         dd.nativeDisplay     = desc.nativeDisplay;
+        dd.nativeCreateInfo  = desc.nativeCreateInfo;
         dd.callbackInterface = &s_callback;
 
         VriDevice* device = nullptr;

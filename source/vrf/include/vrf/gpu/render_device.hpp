@@ -32,6 +32,10 @@ namespace vrf
         bool        validation      = true;
         uint64_t    enabledFeatures = 0;       // bitset of VriFeatureBits (best-effort)
         const void* nativeDisplay   = nullptr; // from Window::NativeDisplay(); needed by native GLES on Wayland
+        // Native creation hooks (VriVulkanCreateHooks*), for OpenXR's
+        // XR_KHR_vulkan_enable2 which must interpose vkCreate{Instance,Device}.
+        // Feed vrf::xr::XrSystem::VulkanCreateHooks() here; must outlive Create().
+        const void* nativeCreateInfo = nullptr;
     };
 
     class RenderDevice
