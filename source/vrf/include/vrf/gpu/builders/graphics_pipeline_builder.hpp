@@ -142,6 +142,15 @@ namespace vrf
             return *this;
         }
 
+        // Multiview render targets (0 = single view). 0x3 renders both layers of
+        // a 2-layer array target in one pass (stereo). Must match the render's
+        // VriAttachmentsDesc::viewMask; gate on VriDeviceDesc::hasMultiview.
+        GraphicsPipelineBuilder& SetViewMask(uint32_t viewMask)
+        {
+            m_viewMask = viewMask;
+            return *this;
+        }
+
         [[nodiscard]] Expected<VriPipeline*> Build(RenderDevice& device) const;
 
     private:
@@ -163,5 +172,6 @@ namespace vrf
         VriMultisampleDesc                  m_multisample {};
         VriDepthStencilDesc                 m_depthStencil {};
         VriFormat                           m_depthStencilFormat = VriFormat_Unknown;
+        uint32_t                            m_viewMask           = 0;
     };
 } // namespace vrf

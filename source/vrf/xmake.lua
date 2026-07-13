@@ -53,6 +53,14 @@ target("vrf")
         add_packages("imgui", {public = true})
     end
 
+    -- Optional OpenXR (vrf::xr XrSystem/XrSession). The xr_system/xr_session TUs compile
+    -- empty without VRF_WITH_OPENXR; SimStereoRig/stereo math are always in. Public so
+    -- consumers see the same VRF_WITH_OPENXR headers and link the loader.
+    if has_config("vrf_with_openxr") then
+        add_defines("VRF_WITH_OPENXR", {public = true})
+        add_packages("openxr", "vulkan-headers", {public = true})
+    end
+
     -- Link the Vulkan loader from the installed SDK (see the vulkansdk rule in the
     -- top-level xmake.lua). Public so the loader is linked into dependent binaries.
     if has_config("vrf_backend_vulkan") then
