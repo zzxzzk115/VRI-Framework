@@ -149,6 +149,14 @@ namespace vrf
         m_hasData = true;
     }
 
+    void ImGuiBackend::CmdCopy(VriCommandBuffer* cmd)
+    {
+        if (m_hasData)
+        {
+            m_api.CmdCopyImguiData(cmd, m_gui);
+        }
+    }
+
     void ImGuiBackend::CmdDraw(VriCommandBuffer* cmd)
     {
         if (m_hasData)
