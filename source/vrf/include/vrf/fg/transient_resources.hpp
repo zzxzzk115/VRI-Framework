@@ -62,7 +62,7 @@ namespace vrf::fg
                 T*       resource {nullptr};
                 uint64_t releasedAt {0}; // frame index at release
             };
-            std::vector<std::unique_ptr<T>>                    resources;
+            std::vector<std::unique_ptr<T>>                     resources;
             std::unordered_map<std::size_t, std::vector<Entry>> entryGroups;
         };
         Pool<Texture> m_textures;

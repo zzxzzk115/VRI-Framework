@@ -38,8 +38,8 @@ namespace vrf
         if (this != &other)
         {
             Clear();
-            m_device    = std::exchange(other.m_device, nullptr);
-            m_samplers  = std::move(other.m_samplers);
+            m_device   = std::exchange(other.m_device, nullptr);
+            m_samplers = std::move(other.m_samplers);
             other.m_samplers.clear();
         }
         return *this;

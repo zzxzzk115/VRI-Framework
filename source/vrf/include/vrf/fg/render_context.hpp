@@ -112,8 +112,8 @@ namespace vrf::fg
                                          bindings::StorageBuffer,
                                          bindings::RawDescriptor>;
 
-    using ResourceBindings = std::unordered_map<uint32_t, ResourceBinding>; // binding -> resource
-    using ResourceSet      = std::unordered_map<uint32_t, ResourceBindings>; // set -> bindings
+    using ResourceBindings = std::unordered_map<uint32_t, ResourceBinding>;   // binding -> resource
+    using ResourceSet      = std::unordered_map<uint32_t, ResourceBindings>;  // set -> bindings
     using Samplers         = std::unordered_map<std::string, VriDescriptor*>; // name -> sampler
 
     // ---- attachments ------------------------------------------------------
@@ -172,7 +172,10 @@ namespace vrf::fg
     class RenderContext
     {
     public:
-        RenderContext(RenderDevice& device, VriCommandBuffer* cmd, Samplers& samplers, DescriptorAllocator& descriptors);
+        RenderContext(RenderDevice&        device,
+                      VriCommandBuffer*    cmd,
+                      Samplers&            samplers,
+                      DescriptorAllocator& descriptors);
         RenderContext(const RenderContext&) = delete;
         virtual ~RenderContext()            = default;
 

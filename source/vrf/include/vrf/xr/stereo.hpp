@@ -32,10 +32,10 @@ namespace vrf::xr
 
     struct EyeView
     {
-        Pose pose;         // eye pose in app space
+        Pose pose; // eye pose in app space
         Fov  fov;
-        Mat4 view {1.0f};  // world -> eye
-        Mat4 proj {1.0f};  // eye -> clip (0..1 depth)
+        Mat4 view {1.0f}; // world -> eye
+        Mat4 proj {1.0f}; // eye -> clip (0..1 depth)
     };
 
     struct StereoViews

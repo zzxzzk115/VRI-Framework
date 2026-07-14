@@ -48,14 +48,14 @@ namespace
     };
 
     [[nodiscard]] vrf::Expected<vrf::fg::PassPipeline>
-    makePipeline(vrf::RenderDevice&                                device,
-                 vrf::ShaderLibrary&                               shaders,
-                 const char*                                       shaderId,
+    makePipeline(vrf::RenderDevice&                                   device,
+                 vrf::ShaderLibrary&                                  shaders,
+                 const char*                                          shaderId,
                  const std::vector<vrf::fg::PipelineLayoutInfo::Set>& sets,
-                 const std::vector<VriPushConstantDesc>&           pushConstants,
-                 const std::vector<VriFormat>&                     colorFormats,
-                 VriFormat                                         depthFormat,
-                 VriCullMode                                       cullMode)
+                 const std::vector<VriPushConstantDesc>&              pushConstants,
+                 const std::vector<VriFormat>&                        colorFormats,
+                 VriFormat                                            depthFormat,
+                 VriCullMode                                          cullMode)
     {
         auto vs = shaders.Resolve(shaderId, vrf::ShaderStage::Vertex, {});
         if (!vs)
@@ -203,7 +203,7 @@ int main()
     constexpr VriFormat kAlbedoFormat = VriFormat_RGBA8_UNORM;
 
     std::vector<vrf::fg::Texture> backbuffers;
-    auto rebuildBackbuffers = [&] {
+    auto                          rebuildBackbuffers = [&] {
         backbuffers.clear();
         for (uint32_t i = 0; i < swapchain.TextureCount(); ++i)
         {
@@ -219,45 +219,57 @@ int main()
     // ---- pipelines ----------------------------------------------------------
     using Set = vrf::fg::PipelineLayoutInfo::Set;
 
-    auto gbufferPipeline = makePipeline(
-        device,
-        shaders,
-        "gbuffer",
-        {},
-        {{0, sizeof(PushConstants), VriShaderStage_Vertex}},
-        {kAlbedoFormat, kHdrFormat},
-        kDepthFormat,
-        VriCullMode_Back);
-    auto lightingPipeline = makePipeline(
-        device,
-        shaders,
-        "lighting",
-        {Set {0,
-              {
-                  {.baseRegister = 0, .descriptorNum = 1, .descriptorType = VriDescriptorType_Texture, .shaderStages = VriShaderStage_Fragment},
-                  {.baseRegister = 1, .descriptorNum = 1, .descriptorType = VriDescriptorType_Texture, .shaderStages = VriShaderStage_Fragment},
-                  {.baseRegister = 2, .descriptorNum = 1, .descriptorType = VriDescriptorType_Sampler, .shaderStages = VriShaderStage_Fragment},
-              }}},
-        {},
-        {kHdrFormat},
-        VriFormat_Unknown,
-        VriCullMode_None);
-    auto tonemapPipeline = makePipeline(
-        device,
-        shaders,
-        "tonemap",
-        {Set {0,
-              {
-                  {.baseRegister = 0, .descriptorNum = 1, .descriptorType = VriDescriptorType_Texture, .shaderStages = VriShaderStage_Fragment},
-                  {.baseRegister = 1, .descriptorNum = 1, .descriptorType = VriDescriptorType_Sampler, .shaderStages = VriShaderStage_Fragment},
-              }}},
-        {},
-        {swapchain.Format()},
-        VriFormat_Unknown,
-        VriCullMode_None);
+    auto gbufferPipeline  = makePipeline(device,
+                                        shaders,
+                                        "gbuffer",
+                                         {},
+                                         {{0, sizeof(PushConstants), VriShaderStage_Vertex}},
+                                         {kAlbedoFormat, kHdrFormat},
+                                        kDepthFormat,
+                                        VriCullMode_Back);
+    auto lightingPipeline = makePipeline(device,
+                                         shaders,
+                                         "lighting",
+                                         {Set {0,
+                                               {
+                                                   {.baseRegister   = 0,
+                                                    .descriptorNum  = 1,
+                                                    .descriptorType = VriDescriptorType_Texture,
+                                                    .shaderStages   = VriShaderStage_Fragment},
+                                                   {.baseRegister   = 1,
+                                                    .descriptorNum  = 1,
+                                                    .descriptorType = VriDescriptorType_Texture,
+                                                    .shaderStages   = VriShaderStage_Fragment},
+                                                   {.baseRegister   = 2,
+                                                    .descriptorNum  = 1,
+                                                    .descriptorType = VriDescriptorType_Sampler,
+                                                    .shaderStages   = VriShaderStage_Fragment},
+                                               }}},
+                                         {},
+                                         {kHdrFormat},
+                                         VriFormat_Unknown,
+                                         VriCullMode_None);
+    auto tonemapPipeline  = makePipeline(device,
+                                        shaders,
+                                        "tonemap",
+                                         {Set {0,
+                                               {
+                                                  {.baseRegister   = 0,
+                                                    .descriptorNum  = 1,
+                                                    .descriptorType = VriDescriptorType_Texture,
+                                                    .shaderStages   = VriShaderStage_Fragment},
+                                                  {.baseRegister   = 1,
+                                                    .descriptorNum  = 1,
+                                                    .descriptorType = VriDescriptorType_Sampler,
+                                                    .shaderStages   = VriShaderStage_Fragment},
+                                              }}},
+                                         {},
+                                         {swapchain.Format()},
+                                        VriFormat_Unknown,
+                                        VriCullMode_None);
     if (!gbufferPipeline || !lightingPipeline || !tonemapPipeline)
     {
-        const auto& err = !gbufferPipeline ? gbufferPipeline.error() :
+        const auto& err = !gbufferPipeline  ? gbufferPipeline.error() :
                           !lightingPipeline ? lightingPipeline.error() :
                                               tonemapPipeline.error();
         std::fprintf(stderr, "[framegraph-deferred] pipeline: %s\n", err.message.c_str());
@@ -293,22 +305,23 @@ int main()
 
         // Begin() waited for this slot's previous frame, so its descriptor pools
         // are safe to recycle now.
-        VriCommandBuffer* cmd            = frames.Begin();
+        VriCommandBuffer* cmd           = frames.Begin();
         auto&             slotAllocator = descriptorAllocators[frames.FrameIndex()];
 
         transientResources.update();
         slotAllocator.Reset();
         vrf::fg::RenderContext renderContext {device, cmd, samplers, slotAllocator};
 
-        const float seconds =
-            std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
+        const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
 
         const auto extent = swapchain.Extent();
         const auto aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 
         PushConstants pushConstants;
-        pushConstants.model = glm::rotate(glm::mat4 {1.0f}, seconds * 0.8f, glm::normalize(glm::vec3 {0.3f, 1.0f, 0.2f}));
-        const glm::mat4 view = glm::lookAt(glm::vec3 {0.0f, 0.6f, 2.2f}, glm::vec3 {0.0f}, glm::vec3 {0.0f, 1.0f, 0.0f});
+        pushConstants.model =
+            glm::rotate(glm::mat4 {1.0f}, seconds * 0.8f, glm::normalize(glm::vec3 {0.3f, 1.0f, 0.2f}));
+        const glm::mat4 view =
+            glm::lookAt(glm::vec3 {0.0f, 0.6f, 2.2f}, glm::vec3 {0.0f}, glm::vec3 {0.0f, 1.0f, 0.0f});
         const glm::mat4 proj = glm::perspective(glm::radians(60.0f), aspect, 0.1f, 10.0f);
         pushConstants.mvp    = proj * view * pushConstants.model;
 
@@ -328,14 +341,18 @@ int main()
             "GBuffer",
             [&](FrameGraph::Builder& builder, GBufferData& data) {
                 data.albedo = builder.create<vrf::fg::FrameGraphTexture>(
-                    "Albedo", {.extent = extent, .format = kAlbedoFormat,
-                               .usage = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource});
+                    "Albedo",
+                    {.extent = extent,
+                     .format = kAlbedoFormat,
+                     .usage  = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource});
                 data.normal = builder.create<vrf::fg::FrameGraphTexture>(
-                    "Normal", {.extent = extent, .format = kHdrFormat,
-                               .usage = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource});
+                    "Normal",
+                    {.extent = extent,
+                     .format = kHdrFormat,
+                     .usage  = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource});
                 data.depth = builder.create<vrf::fg::FrameGraphTexture>(
-                    "Depth", {.extent = extent, .format = kDepthFormat,
-                              .usage = VriTextureUsage_DepthStencilAttachment});
+                    "Depth",
+                    {.extent = extent, .format = kDepthFormat, .usage = VriTextureUsage_DepthStencilAttachment});
 
                 data.albedo = builder.write(data.albedo,
                                             vrf::fg::Attachment {.index       = 0,
@@ -368,22 +385,26 @@ int main()
             "Lighting",
             [&](FrameGraph::Builder& builder, LightingData& data) {
                 const auto& gb = blackboard.get<GBufferData>();
-                builder.read(gb.albedo,
-                             vrf::fg::TextureRead {
-                                 .binding     = {.location = {0, 0}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
-                                 .type        = vrf::fg::TextureRead::Type::SampledImage,
-                                 .imageAspect = vrf::fg::ImageAspect::Color,
-                             });
-                builder.read(gb.normal,
-                             vrf::fg::TextureRead {
-                                 .binding     = {.location = {0, 1}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
-                                 .type        = vrf::fg::TextureRead::Type::SampledImage,
-                                 .imageAspect = vrf::fg::ImageAspect::Color,
-                             });
+                builder.read(
+                    gb.albedo,
+                    vrf::fg::TextureRead {
+                        .binding     = {.location = {0, 0}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
+                        .type        = vrf::fg::TextureRead::Type::SampledImage,
+                        .imageAspect = vrf::fg::ImageAspect::Color,
+                    });
+                builder.read(
+                    gb.normal,
+                    vrf::fg::TextureRead {
+                        .binding     = {.location = {0, 1}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
+                        .type        = vrf::fg::TextureRead::Type::SampledImage,
+                        .imageAspect = vrf::fg::ImageAspect::Color,
+                    });
 
                 data.sceneColor = builder.create<vrf::fg::FrameGraphTexture>(
-                    "SceneColor", {.extent = extent, .format = kHdrFormat,
-                                   .usage = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource});
+                    "SceneColor",
+                    {.extent = extent,
+                     .format = kHdrFormat,
+                     .usage  = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource});
                 data.sceneColor = builder.write(data.sceneColor,
                                                 vrf::fg::Attachment {.index       = 0,
                                                                      .imageAspect = vrf::fg::ImageAspect::Color,
@@ -399,12 +420,13 @@ int main()
         graph.addCallbackPass(
             "Tonemap",
             [&](FrameGraph::Builder& builder, auto&) {
-                builder.read(blackboard.get<LightingData>().sceneColor,
-                             vrf::fg::TextureRead {
-                                 .binding     = {.location = {0, 0}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
-                                 .type        = vrf::fg::TextureRead::Type::SampledImage,
-                                 .imageAspect = vrf::fg::ImageAspect::Color,
-                             });
+                builder.read(
+                    blackboard.get<LightingData>().sceneColor,
+                    vrf::fg::TextureRead {
+                        .binding     = {.location = {0, 0}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
+                        .type        = vrf::fg::TextureRead::Type::SampledImage,
+                        .imageAspect = vrf::fg::ImageAspect::Color,
+                    });
                 backbufferId = builder.write(
                     backbufferId, vrf::fg::Attachment {.index = 0, .imageAspect = vrf::fg::ImageAspect::Color});
                 builder.setSideEffect(); // present target: never cull

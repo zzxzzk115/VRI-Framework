@@ -60,12 +60,12 @@ namespace vrf::fg
         // access/layout the texture is currently in.
         [[nodiscard]] static Texture Borrow(RenderDevice&, VriTexture*, const Desc&, const VriAccessLayoutStage& state);
 
-        [[nodiscard]] VriTexture*  Handle() const noexcept { return m_texture; }
-        [[nodiscard]] const Desc&  GetDesc() const noexcept { return m_desc; }
-        [[nodiscard]] Extent2D     GetExtent() const noexcept { return m_desc.extent; }
-        [[nodiscard]] VriFormat    GetFormat() const noexcept { return m_desc.format; }
-        [[nodiscard]] uint32_t     GetNumLayers() const noexcept { return m_desc.layers; }
-        [[nodiscard]] explicit operator bool() const noexcept { return m_texture != nullptr; }
+        [[nodiscard]] VriTexture* Handle() const noexcept { return m_texture; }
+        [[nodiscard]] const Desc& GetDesc() const noexcept { return m_desc; }
+        [[nodiscard]] Extent2D    GetExtent() const noexcept { return m_desc.extent; }
+        [[nodiscard]] VriFormat   GetFormat() const noexcept { return m_desc.format; }
+        [[nodiscard]] uint32_t    GetNumLayers() const noexcept { return m_desc.layers; }
+        [[nodiscard]] explicit    operator bool() const noexcept { return m_texture != nullptr; }
 
         // Render-target view for one subresource (or the whole layer range when
         // layer/face are nullopt - multiview renders into all layers).

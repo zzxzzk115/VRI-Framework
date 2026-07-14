@@ -82,12 +82,12 @@ namespace
     }
 
     // The single stereo pass both rigs share: clear + multiview triangle.
-    void recordStereoPass(vrf::fg::RenderContext& rc, vrf::xr::StereoFrame& frame, const vrf::fg::PassPipeline& pipeline)
+    void
+    recordStereoPass(vrf::fg::RenderContext& rc, vrf::xr::StereoFrame& frame, const vrf::fg::PassPipeline& pipeline)
     {
-        rc.TransitionTexture(*frame.colorTarget,
-                             {VriAccess_ColorAttachmentWrite,
-                              VriLayout_ColorAttachment,
-                              VriPipelineStage_ColorAttachmentOutput});
+        rc.TransitionTexture(
+            *frame.colorTarget,
+            {VriAccess_ColorAttachmentWrite, VriLayout_ColorAttachment, VriPipelineStage_ColorAttachmentOutput});
 
         vrf::fg::FramebufferInfo fb;
         fb.area     = frame.extent;
@@ -321,7 +321,7 @@ int main(int argc, char** argv)
     }
 
     std::vector<vrf::fg::Texture> backbuffers;
-    auto rebuildBackbuffers = [&] {
+    auto                          rebuildBackbuffers = [&] {
         backbuffers.clear();
         for (uint32_t i = 0; i < swapchain.TextureCount(); ++i)
         {
@@ -360,8 +360,8 @@ int main(int argc, char** argv)
             continue;
         }
 
-        auto frameResult = rig.BeginFrame();
-        auto& frame      = *frameResult;
+        auto  frameResult = rig.BeginFrame();
+        auto& frame       = *frameResult;
 
         VriCommandBuffer* cmd           = frames.Begin();
         auto&             slotAllocator = descriptorAllocators[frames.FrameIndex()];

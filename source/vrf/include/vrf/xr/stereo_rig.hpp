@@ -26,9 +26,9 @@ namespace vrf::xr
 {
     struct StereoFrame
     {
-        bool        shouldRender {false};
-        double      displayTimeSec {0.0}; // predicted display time (XR) / now (sim)
-        StereoViews views;
+        bool         shouldRender {false};
+        double       displayTimeSec {0.0}; // predicted display time (XR) / now (sim)
+        StereoViews  views;
         fg::Texture* colorTarget {nullptr}; // 2-layer array target (layer 0 = left eye)
         Extent2D     extent {};             // per-eye extent
     };

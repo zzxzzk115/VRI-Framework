@@ -17,8 +17,7 @@ namespace vrf
             return MakeError(VriResult_Unsupported, "RayTracing::Get", "device has no ray tracing");
         }
         RayTracing out;
-        if (const auto r =
-                vriGetInterface(device.Handle(), VRI_INTERFACE_RAYTRACING, sizeof(out.m_api), &out.m_api);
+        if (const auto r = vriGetInterface(device.Handle(), VRI_INTERFACE_RAYTRACING, sizeof(out.m_api), &out.m_api);
             !Succeeded(r))
         {
             return MakeError(r, "RayTracing::Get", "vriGetInterface(RAYTRACING) failed");
@@ -273,8 +272,8 @@ namespace vrf
     RayTracingPipeline::RayTracingPipeline(RayTracingPipeline&& other) noexcept :
         m_device {std::exchange(other.m_device, nullptr)}, m_api {other.m_api},
         m_pipeline {std::exchange(other.m_pipeline, nullptr)}, m_sbt {std::exchange(other.m_sbt, nullptr)},
-        m_layout {std::move(other.m_layout)}, m_raygenRegion {other.m_raygenRegion},
-        m_missRegion {other.m_missRegion}, m_hitRegion {other.m_hitRegion}
+        m_layout {std::move(other.m_layout)}, m_raygenRegion {other.m_raygenRegion}, m_missRegion {other.m_missRegion},
+        m_hitRegion {other.m_hitRegion}
     {}
 
     RayTracingPipeline& RayTracingPipeline::operator=(RayTracingPipeline&& other) noexcept
@@ -334,8 +333,7 @@ namespace vrf
     RayTracingPipelineBuilder& RayTracingPipelineBuilder::SetRayGen(const Shader& shader)
     {
         assert(m_raygenGroups == 0 && m_missGroups == 0 && "raygen must be added first");
-        m_shaders.push_back(VriShaderDesc {
-            VriShaderStage_RayGen, shader.spirv, shader.size, shader.entryPoint});
+        m_shaders.push_back(VriShaderDesc {VriShaderStage_RayGen, shader.spirv, shader.size, shader.entryPoint});
         m_groups.push_back(VriShaderGroupDesc {
             .type               = VriShaderGroupType_General,
             .generalShader      = static_cast<uint32_t>(m_shaders.size() - 1),
@@ -408,8 +406,7 @@ namespace vrf
             .groupNum          = static_cast<uint32_t>(m_groups.size()),
             .maxRecursionDepth = m_maxRecursionDepth,
         };
-        if (const auto r = out.m_api.CreateRayTracingPipeline(device.Handle(), &desc, &out.m_pipeline);
-            !Succeeded(r))
+        if (const auto r = out.m_api.CreateRayTracingPipeline(device.Handle(), &desc, &out.m_pipeline); !Succeeded(r))
         {
             return MakeError(r, "RayTracingPipelineBuilder::Build", "CreateRayTracingPipeline failed");
         }
@@ -421,7 +418,8 @@ namespace vrf
         const auto     groupCount = static_cast<uint32_t>(m_groups.size());
 
         std::vector<uint8_t> handles(static_cast<size_t>(groupCount) * handleSize);
-        if (const auto r = out.m_api.GetShaderGroupHandles(out.m_pipeline, 0, groupCount, handles.size(), handles.data());
+        if (const auto r =
+                out.m_api.GetShaderGroupHandles(out.m_pipeline, 0, groupCount, handles.size(), handles.data());
             !Succeeded(r))
         {
             return MakeError(r, "RayTracingPipelineBuilder::Build", "GetShaderGroupHandles failed");

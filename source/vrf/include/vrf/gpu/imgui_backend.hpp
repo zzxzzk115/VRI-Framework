@@ -18,8 +18,8 @@
 #include <cstdint>
 #include <vector>
 
-#include <vri/vri.h>
 #include <vri/ext/vri_ext_imgui.h>
+#include <vri/vri.h>
 
 #include "vrf/core/math.hpp"
 #include "vrf/core/result.hpp"

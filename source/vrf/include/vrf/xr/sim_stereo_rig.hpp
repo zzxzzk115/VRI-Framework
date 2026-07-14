@@ -19,7 +19,7 @@ namespace vrf::xr
 {
     struct SimStereoRigDesc
     {
-        Extent2D  eyeExtent {1440, 1600};   // per-eye resolution (Quest-2-ish default)
+        Extent2D  eyeExtent {1440, 1600}; // per-eye resolution (Quest-2-ish default)
         VriFormat colorFormat {VriFormat_RGBA8_UNORM};
         float     ipdMeters {0.063f};
         Fov       fov {Fov::Symmetric(glm::radians(45.0f), glm::radians(45.0f))};
@@ -33,29 +33,29 @@ namespace vrf::xr
     class SimStereoRig final : public StereoRig
     {
     public:
-        [[nodiscard]] static Expected<std::unique_ptr<SimStereoRig>> Create(RenderDevice&, const SimStereoRigDesc& = {});
+        [[nodiscard]] static Expected<std::unique_ptr<SimStereoRig>> Create(RenderDevice&,
+                                                                            const SimStereoRigDesc& = {});
 
         [[nodiscard]] Expected<StereoFrame> BeginFrame() override;
-        void PreSubmit(VriCommandBuffer*, StereoFrame&) override {}
-        void EndFrame(const StereoFrame&) override {}
+        void                                PreSubmit(VriCommandBuffer*, StereoFrame&) override {}
+        void                                EndFrame(const StereoFrame&) override {}
 
         [[nodiscard]] Extent2D  EyeExtent() const override { return m_desc.eyeExtent; }
         [[nodiscard]] VriFormat ColorFormat() const override { return m_desc.colorFormat; }
         [[nodiscard]] bool      IsXr() const override { return false; }
 
         // App-driven head pose (a fly camera, a recorded trajectory, ...).
-        void SetHeadPose(const Pose& pose) { m_headPose = pose; }
+        void                      SetHeadPose(const Pose& pose) { m_headPose = pose; }
         [[nodiscard]] const Pose& HeadPose() const { return m_headPose; }
 
-        void SetIpd(float meters) { m_desc.ipdMeters = meters; }
+        void                SetIpd(float meters) { m_desc.ipdMeters = meters; }
         [[nodiscard]] float Ipd() const { return m_desc.ipdMeters; }
 
         // The persistent eye target (also handed out via StereoFrame::colorTarget).
         [[nodiscard]] fg::Texture& EyeTarget() { return m_target; }
 
     private:
-        SimStereoRig(const SimStereoRigDesc& desc, fg::Texture&& target) :
-            m_desc {desc}, m_target {std::move(target)}
+        SimStereoRig(const SimStereoRigDesc& desc, fg::Texture&& target) : m_desc {desc}, m_target {std::move(target)}
         {}
 
         SimStereoRigDesc m_desc;

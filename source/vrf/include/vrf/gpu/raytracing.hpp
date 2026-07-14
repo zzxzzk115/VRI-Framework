@@ -13,8 +13,8 @@
 #include <memory>
 #include <vector>
 
-#include <vri/vri.h>
 #include <vri/ext/vri_ext_raytracing.h>
+#include <vri/vri.h>
 
 #include "vrf/core/math.hpp"
 #include "vrf/core/result.hpp"
@@ -45,9 +45,12 @@ namespace vrf
         uint64_t blasReference {0};
 
         // From a column-major glm transform + a BLAS device address.
-        [[nodiscard]] static AsInstance
-        Make(const Mat4& transform, uint64_t blasAddress, uint32_t instanceId = 0, uint8_t mask = 0xFF,
-             uint32_t sbtOffset = 0, uint8_t flags = 0x1 /* cull-disable */);
+        [[nodiscard]] static AsInstance Make(const Mat4& transform,
+                                             uint64_t    blasAddress,
+                                             uint32_t    instanceId = 0,
+                                             uint8_t     mask       = 0xFF,
+                                             uint32_t    sbtOffset  = 0,
+                                             uint8_t     flags      = 0x1 /* cull-disable */);
     };
 
     class Blas
@@ -62,17 +65,17 @@ namespace vrf
 
         // Size an AS for the given triangle geometries (buffers must carry
         // VriBufferUsage_AccelerationBuildInput). Record the build with CmdBuild.
-        [[nodiscard]] static Expected<Blas> Create(RenderDevice&,
-                                                   std::vector<VriAsTrianglesDesc> geometries,
-                                                   VriAsGeometryFlags                 geometryFlags = VriAsGeometry_Opaque,
-                                                   VriAccelerationStructureBuildFlags buildFlags =
-                                                       VriAccelerationStructureBuild_PreferFastTrace);
+        [[nodiscard]] static Expected<Blas>
+        Create(RenderDevice&,
+               std::vector<VriAsTrianglesDesc>    geometries,
+               VriAsGeometryFlags                 geometryFlags = VriAsGeometry_Opaque,
+               VriAccelerationStructureBuildFlags buildFlags    = VriAccelerationStructureBuild_PreferFastTrace);
 
         void CmdBuild(VriCommandBuffer*);
 
-        [[nodiscard]] uint64_t DeviceAddress() const;
+        [[nodiscard]] uint64_t                  DeviceAddress() const;
         [[nodiscard]] VriAccelerationStructure* Handle() const noexcept { return m_as; }
-        [[nodiscard]] explicit operator bool() const noexcept { return m_as != nullptr; }
+        [[nodiscard]] explicit                  operator bool() const noexcept { return m_as != nullptr; }
 
     private:
         void Reset() noexcept;
@@ -97,10 +100,10 @@ namespace vrf
 
         // Sized for up to maxInstances; owns a host-visible instance buffer so
         // SetInstances + CmdBuild can run every frame.
-        [[nodiscard]] static Expected<Tlas> Create(RenderDevice&,
-                                                   uint32_t                           maxInstances,
-                                                   VriAccelerationStructureBuildFlags buildFlags =
-                                                       VriAccelerationStructureBuild_PreferFastTrace);
+        [[nodiscard]] static Expected<Tlas>
+        Create(RenderDevice&,
+               uint32_t                           maxInstances,
+               VriAccelerationStructureBuildFlags buildFlags = VriAccelerationStructureBuild_PreferFastTrace);
 
         // Map-write the instance records (count <= maxInstances).
         void SetInstances(const AsInstance* instances, uint32_t count);
@@ -112,7 +115,7 @@ namespace vrf
         [[nodiscard]] VriDescriptor* Descriptor();
 
         [[nodiscard]] VriAccelerationStructure* Handle() const noexcept { return m_as; }
-        [[nodiscard]] explicit operator bool() const noexcept { return m_as != nullptr; }
+        [[nodiscard]] explicit                  operator bool() const noexcept { return m_as != nullptr; }
 
     private:
         void Reset() noexcept;
@@ -142,7 +145,7 @@ namespace vrf
 
         void CmdTraceRays(VriCommandBuffer*, uint32_t width, uint32_t height, uint32_t depth = 1) const;
 
-        [[nodiscard]] VriPipeline* Handle() const noexcept { return m_pipeline; }
+        [[nodiscard]] VriPipeline*                                   Handle() const noexcept { return m_pipeline; }
         [[nodiscard]] const std::shared_ptr<fg::PipelineLayoutInfo>& Layout() const noexcept { return m_layout; }
         [[nodiscard]] explicit operator bool() const noexcept { return m_pipeline != nullptr; }
 

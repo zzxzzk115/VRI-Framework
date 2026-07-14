@@ -48,7 +48,7 @@ namespace vrf
         m_device   = nullptr;
     }
 
-    Expected<ImGuiBackend> ImGuiBackend::Create(RenderDevice&  device,
+    Expected<ImGuiBackend> ImGuiBackend::Create(RenderDevice&   device,
                                                 const VriFormat colorFormat,
                                                 const VriFormat depthFormat,
                                                 const void*     fontPixels,

@@ -88,10 +88,8 @@ namespace vrf::fg
         return Texture {device, texture, desc, true};
     }
 
-    Texture Texture::Borrow(RenderDevice&               device,
-                            VriTexture*                 texture,
-                            const Desc&                 desc,
-                            const VriAccessLayoutStage& state)
+    Texture
+    Texture::Borrow(RenderDevice& device, VriTexture* texture, const Desc& desc, const VriAccessLayoutStage& state)
     {
         Texture out {device, texture, desc, false};
         out.state = state;
@@ -113,18 +111,18 @@ namespace vrf::fg
                              (resolvedLayer ? *resolvedLayer + 1u : 0u);
 
         const auto layerNum = (m_desc.cubemap ? 6u : 1u) * std::max(m_desc.layers, 1u);
-        return GetOrCreateView(key,
-                               VriTextureViewDesc {
-                                   .texture   = m_texture,
-                                   .viewType  = resolvedLayer || layerNum == 1 ? VriTextureViewType_2D :
-                                                                                 VriTextureViewType_2DArray,
-                                   .format    = VriFormat_Unknown,
-                                   .aspect    = convert(aspect),
-                                   .baseMip   = 0,
-                                   .mipNum    = 1,
-                                   .baseLayer = resolvedLayer.value_or(0),
-                                   .layerNum  = resolvedLayer ? 1u : 0u,
-                               });
+        return GetOrCreateView(
+            key,
+            VriTextureViewDesc {
+                .texture   = m_texture,
+                .viewType  = resolvedLayer || layerNum == 1 ? VriTextureViewType_2D : VriTextureViewType_2DArray,
+                .format    = VriFormat_Unknown,
+                .aspect    = convert(aspect),
+                .baseMip   = 0,
+                .mipNum    = 1,
+                .baseLayer = resolvedLayer.value_or(0),
+                .layerNum  = resolvedLayer ? 1u : 0u,
+            });
     }
 
     VriDescriptor* Texture::SampledView(const ImageAspect aspect)
@@ -161,8 +159,7 @@ namespace vrf::fg
         }
 
         VriDescriptor* view = nullptr;
-        if (const auto r = m_device->Core().CreateTextureView(m_device->Handle(), &desc, &view);
-            r != VriResult_Success)
+        if (const auto r = m_device->Core().CreateTextureView(m_device->Handle(), &desc, &view); r != VriResult_Success)
         {
             LogError("fg::Texture: CreateTextureView failed ({})", static_cast<int>(r));
             return nullptr;

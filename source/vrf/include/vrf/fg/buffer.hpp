@@ -55,7 +55,7 @@ namespace vrf::fg
         [[nodiscard]] VriBuffer*  Handle() const noexcept { return m_buffer; }
         [[nodiscard]] const Desc& GetDesc() const noexcept { return m_desc; }
         [[nodiscard]] uint64_t    GetSize() const noexcept { return m_desc.dataSize(); }
-        [[nodiscard]] explicit operator bool() const noexcept { return m_buffer != nullptr; }
+        [[nodiscard]] explicit    operator bool() const noexcept { return m_buffer != nullptr; }
 
         // View descriptor for shader binding (ConstantBuffer / StorageBuffer).
         [[nodiscard]] VriDescriptor* View(VriDescriptorType);
