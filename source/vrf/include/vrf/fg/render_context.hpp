@@ -197,6 +197,12 @@ namespace vrf::fg
         // resourceSet. Clears the consumed bindings.
         void BindPipeline(const PassPipeline&);
 
+        // Allocate/write/bind ONE register space from resourceSet, leaving the
+        // declarations intact - for passes that rebind a material set per draw
+        // while a shared set (camera) stays bound. Pipeline+layout must already
+        // be set on the command buffer.
+        void BindSingleDescriptorSet(const PassPipeline&, uint32_t registerSpace);
+
         // Fullscreen triangle helper: BeginRendering + BindPipeline + draw(3) +
         // EndRendering.
         void RenderFullScreenPostProcess(const PassPipeline&);
