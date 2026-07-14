@@ -56,6 +56,10 @@ namespace vrf
         // BEFORE the frame's command buffer is submitted-recording may overlap.
         void Upload(ImDrawData* drawData, Extent2D framebufferExtent);
 
+        // Record the staging -> device geometry copy; OUTSIDE any render pass,
+        // before CmdDraw (skipping it leaves the draw with no geometry).
+        void CmdCopy(VriCommandBuffer* cmd);
+
         // Record the UI draws; inside an open color pass matching colorFormat.
         void CmdDraw(VriCommandBuffer* cmd);
 
