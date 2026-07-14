@@ -38,7 +38,7 @@ namespace vrf::xr
         const Vec3 right = m_headPose.orientation * Vec3 {1.0f, 0.0f, 0.0f};
         for (uint32_t i = 0; i < 2; ++i)
         {
-            auto& eye            = frame.views.eye[i];
+            auto&       eye      = frame.views.eye[i];
             const float side     = i == 0 ? -0.5f : 0.5f;
             eye.pose.orientation = m_headPose.orientation;
             eye.pose.position    = m_headPose.position + right * (side * m_desc.ipdMeters);

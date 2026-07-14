@@ -14,8 +14,8 @@
 #include <cstring>
 #include <vector>
 
-#include <vri/vri.h>
 #include <vri/ext/vri_ext_interop.h>
+#include <vri/vri.h>
 
 #include "vrf/core/log.hpp"
 
@@ -137,9 +137,8 @@ namespace vrf::xr
         {
             const char*          exts[] = {XR_KHR_VULKAN_ENABLE2_EXTENSION_NAME};
             XrInstanceCreateInfo ci {XR_TYPE_INSTANCE_CREATE_INFO};
-            std::strncpy(ci.applicationInfo.applicationName,
-                         desc.applicationName.c_str(),
-                         XR_MAX_APPLICATION_NAME_SIZE - 1);
+            std::strncpy(
+                ci.applicationInfo.applicationName, desc.applicationName.c_str(), XR_MAX_APPLICATION_NAME_SIZE - 1);
             ci.applicationInfo.apiVersion = XR_API_VERSION_1_0;
             ci.enabledExtensionCount      = 1;
             ci.enabledExtensionNames      = exts;
@@ -204,8 +203,7 @@ namespace vrf::xr
                                               views.data());
             if (viewCount >= 1)
             {
-                impl->recommendedEyeExtent = {views[0].recommendedImageRectWidth,
-                                              views[0].recommendedImageRectHeight};
+                impl->recommendedEyeExtent = {views[0].recommendedImageRectWidth, views[0].recommendedImageRectHeight};
             }
         }
 

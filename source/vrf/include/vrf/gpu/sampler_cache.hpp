@@ -32,7 +32,7 @@ namespace vrf
         void Clear() noexcept;
 
     private:
-        RenderDevice*                                m_device = nullptr;
-        std::unordered_map<size_t, VriDescriptor*>   m_samplers;
+        RenderDevice*                              m_device = nullptr;
+        std::unordered_map<size_t, VriDescriptor*> m_samplers;
     };
 } // namespace vrf

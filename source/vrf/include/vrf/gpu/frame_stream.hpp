@@ -51,7 +51,10 @@ namespace vrf
 
         [[nodiscard]] uint32_t FrameIndex() const noexcept { return m_slotIndex; }
         [[nodiscard]] uint32_t FramesInFlight() const noexcept { return static_cast<uint32_t>(m_slots.size()); }
-        [[nodiscard]] VriCommandBuffer* Cmd() const noexcept { return m_slots.empty() ? nullptr : m_slots[m_slotIndex].cmd; }
+        [[nodiscard]] VriCommandBuffer* Cmd() const noexcept
+        {
+            return m_slots.empty() ? nullptr : m_slots[m_slotIndex].cmd;
+        }
 
     private:
         void Reset() noexcept;

@@ -103,8 +103,8 @@ int main()
         return 1;
     }
 
-    auto layoutInfo    = std::make_shared<vrf::fg::PipelineLayoutInfo>();
-    layoutInfo->sets   = {vrf::fg::PipelineLayoutInfo::Set {
+    auto layoutInfo  = std::make_shared<vrf::fg::PipelineLayoutInfo>();
+    layoutInfo->sets = {vrf::fg::PipelineLayoutInfo::Set {
         0,
         {
             {.baseRegister   = 0,
@@ -123,9 +123,9 @@ int main()
                         .ranges        = layoutInfo->sets[0].ranges.data(),
                         .rangeNum      = static_cast<uint32_t>(layoutInfo->sets[0].ranges.size())});
         const VriPipelineLayoutDesc layoutDesc {
-            .descriptorSets    = sets.data(),
-            .descriptorSetNum  = static_cast<uint32_t>(sets.size()),
-            .shaderStages      = VriShaderStage_RayGen | VriShaderStage_Miss | VriShaderStage_ClosestHit,
+            .descriptorSets   = sets.data(),
+            .descriptorSetNum = static_cast<uint32_t>(sets.size()),
+            .shaderStages     = VriShaderStage_RayGen | VriShaderStage_Miss | VriShaderStage_ClosestHit,
         };
         if (!vrf::Succeeded(core.CreatePipelineLayout(device.Handle(), &layoutDesc, &layoutInfo->handle)))
         {
@@ -151,13 +151,13 @@ int main()
     }
 
     // ---- output image + readback buffer -------------------------------------
-    auto outputResult = vrf::fg::Texture::Create(device,
-                                                 {
-                                                     .extent = {kSize, kSize},
-                                                     .format = VriFormat_RGBA8_UNORM,
-                                                     .usage  = VriTextureUsage_ShaderResourceStorage |
-                                                              VriTextureUsage_TransferSrc,
-                                                 });
+    auto outputResult =
+        vrf::fg::Texture::Create(device,
+                                 {
+                                     .extent = {kSize, kSize},
+                                     .format = VriFormat_RGBA8_UNORM,
+                                     .usage  = VriTextureUsage_ShaderResourceStorage | VriTextureUsage_TransferSrc,
+                                 });
     if (!outputResult)
     {
         std::fprintf(stderr, "[rt-triangle] output image: %s\n", outputResult.error().message.c_str());
@@ -192,10 +192,9 @@ int main()
         blas->CmdBuild(cmd);
         tlas->CmdBuild(cmd);
 
-        rc.TransitionTexture(output,
-                             {VriAccess_ShaderResourceStorageWrite,
-                              VriLayout_ShaderResourceStorage,
-                              VriPipelineStage_RayTracingShader});
+        rc.TransitionTexture(
+            output,
+            {VriAccess_ShaderResourceStorageWrite, VriLayout_ShaderResourceStorage, VriPipelineStage_RayTracingShader});
 
         core.CmdSetPipelineLayout(cmd, layoutInfo->handle);
         core.CmdSetPipeline(cmd, pipeline->Handle());
@@ -216,9 +215,9 @@ int main()
     frame.Submit(); // synchronous: waits for the GPU
 
     // ---- verify --------------------------------------------------------------
-    const auto* pixels = static_cast<const uint8_t*>(core.MapBuffer(readback, 0, readbackDesc.size));
-    const auto  center = (uint64_t {kSize / 2} * kSize + kSize / 2) * 4;
-    const auto  corner = uint64_t {0};
+    const auto* pixels     = static_cast<const uint8_t*>(core.MapBuffer(readback, 0, readbackDesc.size));
+    const auto  center     = (uint64_t {kSize / 2} * kSize + kSize / 2) * 4;
+    const auto  corner     = uint64_t {0};
     const bool  centerHit  = pixels[center + 0] > 0 || pixels[center + 1] > 0; // barycentric shading
     const bool  cornerMiss = pixels[corner + 2] > pixels[corner + 0];          // dark blue miss color
     std::printf("[rt-triangle] center pixel: (%u, %u, %u) %s, corner pixel: (%u, %u, %u) %s\n",

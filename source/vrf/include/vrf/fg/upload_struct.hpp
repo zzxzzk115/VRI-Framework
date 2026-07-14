@@ -18,7 +18,8 @@
 namespace vrf::fg
 {
     template<typename T>
-    [[nodiscard]] FrameGraphResource uploadStruct(FrameGraph& fg, const std::string_view passName, TransientBuffer<T>&& s)
+    [[nodiscard]] FrameGraphResource
+    uploadStruct(FrameGraph& fg, const std::string_view passName, TransientBuffer<T>&& s)
     {
         static_assert(std::is_trivially_copyable_v<T>);
         constexpr auto kDataSize = static_cast<uint32_t>(sizeof(T));
@@ -41,10 +42,10 @@ namespace vrf::fg
                 data.buffer = builder.write(data.buffer, BindingInfo {.pipelineStage = PipelineStage::Transfer});
             },
             [payload](const Data& data, FrameGraphPassResources& resources, void* ctx) {
-                auto& rc = *static_cast<RenderContext*>(ctx);
+                auto& rc     = *static_cast<RenderContext*>(ctx);
                 auto* buffer = resources.get<FrameGraphBuffer>(data.buffer).buffer;
                 buffer->Write(0, kDataSize, payload.get());
-                (void) rc;
+                (void)rc;
             });
 
         return buffer;

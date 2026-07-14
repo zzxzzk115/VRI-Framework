@@ -18,7 +18,7 @@ namespace vrf::fg
                 fb.emplace().area = texture->GetExtent();
             }
 
-            const auto attachment = decodeAttachment(bits);
+            const auto           attachment = decodeAttachment(bits);
             const AttachmentInfo info {
                 .target     = texture,
                 .layer      = attachment.layer,
@@ -123,15 +123,13 @@ namespace vrf::fg
         {
             case TextureRead::Type::CombinedImageSampler:
             case TextureRead::Type::SampledImage:
-                rc.resourceSet[location.set][location.binding] =
-                    bindings::SampledImage {texture, read.imageAspect};
+                rc.resourceSet[location.set][location.binding] = bindings::SampledImage {texture, read.imageAspect};
                 rc.TransitionTexture(*texture, {VriAccess_ShaderResourceRead, VriLayout_ShaderResource, stages});
                 break;
             case TextureRead::Type::StorageImage:
-                rc.resourceSet[location.set][location.binding] =
-                    bindings::StorageImage {texture, read.imageAspect, 0};
-                rc.TransitionTexture(
-                    *texture, {VriAccess_ShaderResourceStorageRead, VriLayout_ShaderResourceStorage, stages});
+                rc.resourceSet[location.set][location.binding] = bindings::StorageImage {texture, read.imageAspect, 0};
+                rc.TransitionTexture(*texture,
+                                     {VriAccess_ShaderResourceStorageRead, VriLayout_ShaderResourceStorage, stages});
                 break;
         }
     }
@@ -182,8 +180,8 @@ namespace vrf::fg
 
         if (static_cast<bool>(pipelineStage & PipelineStage::Transfer))
         {
-            rc.TransitionTexture(*texture,
-                                 {VriAccess_CopyDestinationWrite, VriLayout_CopyDestination, VriPipelineStage_Transfer});
+            rc.TransitionTexture(
+                *texture, {VriAccess_CopyDestinationWrite, VriLayout_CopyDestination, VriPipelineStage_Transfer});
             return;
         }
 
@@ -196,7 +194,6 @@ namespace vrf::fg
 
     std::string FrameGraphTexture::toString(const Desc& desc)
     {
-        return std::format("{}x{} (format {})", desc.extent.width, desc.extent.height,
-                           static_cast<int>(desc.format));
+        return std::format("{}x{} (format {})", desc.extent.width, desc.extent.height, static_cast<int>(desc.format));
     }
 } // namespace vrf::fg

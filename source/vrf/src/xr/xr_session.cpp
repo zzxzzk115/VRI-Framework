@@ -45,19 +45,16 @@ namespace vrf::xr
             };
         }
 
-        [[nodiscard]] Fov fromXr(const XrFovf& f)
-        {
-            return Fov {f.angleLeft, f.angleRight, f.angleUp, f.angleDown};
-        }
+        [[nodiscard]] Fov fromXr(const XrFovf& f) { return Fov {f.angleLeft, f.angleRight, f.angleUp, f.angleDown}; }
     } // namespace
 
     struct XrSession::Impl
     {
         RenderDevice* device {nullptr};
 
-        ::XrInstance instance {XR_NULL_HANDLE};
-        ::XrSession  session {XR_NULL_HANDLE};
-        ::XrSpace    appSpace {XR_NULL_HANDLE};
+        ::XrInstance  instance {XR_NULL_HANDLE};
+        ::XrSession   session {XR_NULL_HANDLE};
+        ::XrSpace     appSpace {XR_NULL_HANDLE};
         ::XrSwapchain swapchain {XR_NULL_HANDLE};
 
         Extent2D  eyeExtent {};
@@ -253,10 +250,8 @@ namespace vrf::xr
             uint32_t imageCount = 0;
             xrEnumerateSwapchainImages(impl->swapchain, 0, &imageCount, nullptr);
             std::vector<XrSwapchainImageVulkanKHR> images(imageCount, {XR_TYPE_SWAPCHAIN_IMAGE_VULKAN_KHR});
-            xrEnumerateSwapchainImages(impl->swapchain,
-                                       imageCount,
-                                       &imageCount,
-                                       reinterpret_cast<XrSwapchainImageBaseHeader*>(images.data()));
+            xrEnumerateSwapchainImages(
+                impl->swapchain, imageCount, &imageCount, reinterpret_cast<XrSwapchainImageBaseHeader*>(images.data()));
 
             impl->wrappedImages.resize(imageCount, nullptr);
             impl->targets.reserve(imageCount);
@@ -277,14 +272,14 @@ namespace vrf::xr
                 {
                     return MakeError("xr::XrSession: WrapTexture failed");
                 }
-                impl->targets.push_back(fg::Texture::Borrow(
-                    device,
-                    impl->wrappedImages[i],
-                    {.extent = impl->eyeExtent,
-                     .format = impl->colorFormat,
-                     .layers = 2,
-                     .usage  = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource},
-                    {VriAccess_None, VriLayout_Undefined, VriPipelineStage_None}));
+                impl->targets.push_back(
+                    fg::Texture::Borrow(device,
+                                        impl->wrappedImages[i],
+                                        {.extent = impl->eyeExtent,
+                                         .format = impl->colorFormat,
+                                         .layers = 2,
+                                         .usage  = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource},
+                                        {VriAccess_None, VriLayout_Undefined, VriPipelineStage_None}));
             }
         }
 
@@ -382,7 +377,7 @@ namespace vrf::xr
         {
             return;
         }
-        auto& target = *frame.colorTarget;
+        auto&                      target = *frame.colorTarget;
         const VriAccessLayoutStage wanted {
             VriAccess_ColorAttachmentWrite, VriLayout_ColorAttachment, VriPipelineStage_ColorAttachmentOutput};
         if (target.state.layout == wanted.layout)
@@ -410,8 +405,8 @@ namespace vrf::xr
 
         XrCompositionLayerProjectionView projViews[2] {{XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW},
                                                        {XR_TYPE_COMPOSITION_LAYER_PROJECTION_VIEW}};
-        XrCompositionLayerProjection layer {XR_TYPE_COMPOSITION_LAYER_PROJECTION};
-        bool                         haveLayer = false;
+        XrCompositionLayerProjection     layer {XR_TYPE_COMPOSITION_LAYER_PROJECTION};
+        bool                             haveLayer = false;
 
         if (frame.shouldRender && impl.imageAcquired)
         {

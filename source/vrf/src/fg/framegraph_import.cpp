@@ -11,6 +11,6 @@ namespace vrf::fg
     FrameGraphResource importTexture(FrameGraph& fg, const std::string_view name, Texture* texture)
     {
         assert(texture && *texture);
-        return fg.import<FrameGraphTexture>(name, texture->GetDesc(), {texture});
+        return fg.import <FrameGraphTexture>(name, texture->GetDesc(), {texture});
     }
 } // namespace vrf::fg

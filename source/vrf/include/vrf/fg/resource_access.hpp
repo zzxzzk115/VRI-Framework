@@ -71,10 +71,10 @@ namespace vrf::fg
 
     struct Attachment
     {
-        uint32_t                index {0};
-        ImageAspect             imageAspect {ImageAspect::None};
-        std::optional<uint32_t> layer;
-        std::optional<CubeFace> face;
+        uint32_t                  index {0};
+        ImageAspect               imageAspect {ImageAspect::None};
+        std::optional<uint32_t>   layer;
+        std::optional<CubeFace>   face;
         std::optional<ClearValue> clearValue;
 
         [[nodiscard]] operator uint32_t() const;

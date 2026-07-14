@@ -61,11 +61,10 @@ namespace vrf::fg
         [[nodiscard]] VriAttachmentDesc makeAttachment(const AttachmentInfo& in, const ImageAspect aspect)
         {
             return VriAttachmentDesc {
-                .view    = in.target->AttachmentView(aspect, in.layer, in.face),
-                .loadOp  = in.clearValue ? VriAttachmentLoadOp_Clear : VriAttachmentLoadOp_Load,
-                .storeOp = VriAttachmentStoreOp_Store,
-                .clearValue =
-                    in.clearValue ? convert(*in.clearValue, aspect != ImageAspect::Color) : VriClearValue {},
+                .view        = in.target->AttachmentView(aspect, in.layer, in.face),
+                .loadOp      = in.clearValue ? VriAttachmentLoadOp_Clear : VriAttachmentLoadOp_Load,
+                .storeOp     = VriAttachmentStoreOp_Store,
+                .clearValue  = in.clearValue ? convert(*in.clearValue, aspect != ImageAspect::Color) : VriClearValue {},
                 .resolveView = nullptr,
             };
         }
@@ -119,7 +118,7 @@ namespace vrf::fg
 
         auto tryAllocate = [&](VriDescriptorPool* pool) -> VriDescriptorSet* {
             VriDescriptorSet* set = nullptr;
-            const auto r = m_device->Core().AllocateDescriptorSets(pool, layout.handle, setIndex, &set, 1);
+            const auto        r   = m_device->Core().AllocateDescriptorSets(pool, layout.handle, setIndex, &set, 1);
             return Succeeded(r) ? set : nullptr;
         };
 
@@ -262,8 +261,8 @@ namespace vrf::fg
         };
         device.Core().CmdBeginRendering(cmd, &desc);
 
-        const VriViewport viewport {0.0f, 0.0f, static_cast<float>(fb.area.width),
-                                    static_cast<float>(fb.area.height), 0.0f, 1.0f};
+        const VriViewport viewport {
+            0.0f, 0.0f, static_cast<float>(fb.area.width), static_cast<float>(fb.area.height), 0.0f, 1.0f};
         device.Core().CmdSetViewports(cmd, &viewport, 1);
         const VriRect scissor {0, 0, fb.area.width, fb.area.height};
         device.Core().CmdSetScissors(cmd, &scissor, 1);
@@ -372,8 +371,7 @@ namespace vrf::fg
                             }
                             else if constexpr (std::is_same_v<T, bindings::StorageBuffer>)
                             {
-                                return b.buffer->View(range.descriptorType ==
-                                                              VriDescriptorType_StructuredBuffer ?
+                                return b.buffer->View(range.descriptorType == VriDescriptorType_StructuredBuffer ?
                                                           VriDescriptorType_StructuredBuffer :
                                                           VriDescriptorType_StorageBuffer);
                             }

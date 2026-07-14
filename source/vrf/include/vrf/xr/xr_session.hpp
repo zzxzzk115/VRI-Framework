@@ -33,10 +33,10 @@ namespace vrf::xr
 {
     enum class SessionState
     {
-        Idle,         // created, runtime not yet READY
-        Running,      // between xrBeginSession and xrEndSession
-        Stopping,     // runtime asked to stop
-        Exiting,      // session/instance lost or exit requested - destroy the rig
+        Idle,     // created, runtime not yet READY
+        Running,  // between xrBeginSession and xrEndSession
+        Stopping, // runtime asked to stop
+        Exiting,  // session/instance lost or exit requested - destroy the rig
     };
 
     // Raw handles for app-side OpenXR extensions (eye tracking, hand tracking,
@@ -44,8 +44,8 @@ namespace vrf::xr
     struct XrSessionHandles
     {
         ::XrInstance instance {nullptr};
-        void*        session {nullptr}; // XrSession
-        void*        appSpace {nullptr}; // XrSpace (LOCAL reference space)
+        void*        session {nullptr};        // XrSession
+        void*        appSpace {nullptr};       // XrSpace (LOCAL reference space)
         int64_t      predictedDisplayTime {0}; // XrTime of the frame between Begin/EndFrame
     };
 
@@ -61,8 +61,8 @@ namespace vrf::xr
         [[nodiscard]] static Expected<std::unique_ptr<XrSession>> Create(XrSystem&, RenderDevice&);
 
         [[nodiscard]] Expected<StereoFrame> BeginFrame() override;
-        void PreSubmit(VriCommandBuffer*, StereoFrame&) override;
-        void EndFrame(const StereoFrame&) override;
+        void                                PreSubmit(VriCommandBuffer*, StereoFrame&) override;
+        void                                EndFrame(const StereoFrame&) override;
 
         [[nodiscard]] Extent2D  EyeExtent() const override;
         [[nodiscard]] VriFormat ColorFormat() const override;
