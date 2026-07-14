@@ -301,21 +301,38 @@ namespace vrf::fg
 
     void RenderContext::BindDescriptorSets(const PassPipeline& pipeline)
     {
+        for (const auto& setLayout : pipeline.layout->sets)
+        {
+            BindSingleDescriptorSet(pipeline, setLayout.registerSpace);
+        }
+        resourceSet.clear();
+    }
+
+    void RenderContext::BindSingleDescriptorSet(const PassPipeline& pipeline, const uint32_t registerSpace)
+    {
         const auto& layout = *pipeline.layout;
 
-        for (const auto& setLayout : layout.sets)
+        const auto layoutIt = std::find_if(layout.sets.begin(), layout.sets.end(), [&](const auto& set) {
+            return set.registerSpace == registerSpace;
+        });
+        if (layoutIt == layout.sets.end())
+        {
+            return;
+        }
+        const auto& setLayout = *layoutIt;
+
         {
             const auto setIt = resourceSet.find(setLayout.registerSpace);
             if (setIt == resourceSet.end())
             {
-                continue;
+                return;
             }
             const auto& boundResources = setIt->second;
 
             auto* set = descriptors.Allocate(layout, setLayout.registerSpace);
             if (!set)
             {
-                continue;
+                return;
             }
 
             // One update per range; range order in the layout is authoritative.
@@ -389,7 +406,5 @@ namespace vrf::fg
 
             device.Core().CmdSetDescriptorSet(cmd, setLayout.registerSpace, set);
         }
-
-        resourceSet.clear();
     }
 } // namespace vrf::fg
