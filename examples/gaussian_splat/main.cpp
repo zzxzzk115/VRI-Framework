@@ -500,7 +500,7 @@ int main(int argc, char** argv)
                                 .descriptorType = VriDescriptorType_StorageBuffer,
                                 .shaderStages   = VriShaderStage_Mesh},
                            }};
-        auto      ms = shaders.Resolve("splat_mesh", vrf::ShaderStage::Mesh, {});
+        auto      ms = shaders.Resolve("splat", vrf::ShaderStage::Mesh, {});
         auto      fs = shaders.Resolve("splat", vrf::ShaderStage::Fragment, {});
         if (!ms)
         {
