@@ -208,8 +208,9 @@ int main(int argc, char** argv)
     auto& window = *windowResult.value();
 
     vrf::RenderDeviceDesc deviceDesc;
-    deviceDesc.validation = true;
-    auto deviceResult     = vrf::RenderDevice::Create(deviceDesc);
+    deviceDesc.validation      = true;
+    deviceDesc.enabledFeatures = VriFeature_MeshShader; // opt-in mesh-shader splat path
+    auto deviceResult          = vrf::RenderDevice::Create(deviceDesc);
     if (!deviceResult)
     {
         std::fprintf(stderr, "[gaussian-splat] device: %s\n", deviceResult.error().message.c_str());
@@ -217,6 +218,25 @@ int main(int argc, char** argv)
     }
     vrf::RenderDevice&      device = *deviceResult;
     const VriCoreInterface& core   = device.Core();
+
+    // Optional mesh-shader splat path (VRF_SPLAT_MESH=1): a mesh shader expands the
+    // sorted splats into quads instead of the instanced-quad vertex path. Gated on
+    // device support (native Metal has it; MoltenVK/Vulkan here typically does not).
+    const bool             wantMesh = std::getenv("VRF_SPLAT_MESH") != nullptr;
+    const bool             useMesh  = wantMesh && device.Desc()->hasMeshShader == VRI_TRUE;
+    VriMeshShaderInterface meshIface {};
+    if (useMesh)
+    {
+        if (vriGetInterface(device.Handle(), VRI_INTERFACE_MESHSHADER, sizeof(meshIface), &meshIface) !=
+            VriResult_Success)
+        {
+            std::fprintf(stderr, "[gaussian-splat] mesh-shader interface unavailable\n");
+            return 1;
+        }
+    }
+    if (wantMesh && !useMesh)
+        std::printf("[gaussian-splat] VRF_SPLAT_MESH set but device has no mesh-shader support - using vertex path\n");
+    std::printf("[gaussian-splat] geometry path: %s\n", useMesh ? "mesh shader" : "instanced quad (vertex)");
 
     vrf::SwapchainDesc swapDesc;
     swapDesc.window = window.Handle();
@@ -451,6 +471,83 @@ int main(int argc, char** argv)
         info->handle  = *layout;
         info->sets    = {splatSet};
         splatPipeline = vrf::fg::PassPipeline {*pipeline, std::move(info), false};
+    }
+
+    // ---- mesh-shader variant (built only when useMesh) ---------------------
+    vrf::fg::PassPipeline splatMeshPipeline;
+    if (useMesh)
+    {
+        const Set meshSet {0,
+                           {
+                               {.baseRegister   = 0,
+                                .descriptorNum  = 1,
+                                .descriptorType = VriDescriptorType_ConstantBuffer,
+                                .shaderStages   = VriShaderStage_Mesh},
+                               {.baseRegister   = 1,
+                                .descriptorNum  = 1,
+                                .descriptorType = VriDescriptorType_StructuredBuffer,
+                                .shaderStages   = VriShaderStage_Mesh},
+                               {.baseRegister   = 2,
+                                .descriptorNum  = 1,
+                                .descriptorType = VriDescriptorType_StructuredBuffer,
+                                .shaderStages   = VriShaderStage_Mesh},
+                               {.baseRegister   = 3,
+                                .descriptorNum  = 1,
+                                .descriptorType = VriDescriptorType_StructuredBuffer,
+                                .shaderStages   = VriShaderStage_Mesh},
+                               {.baseRegister   = 4,
+                                .descriptorNum  = 1,
+                                .descriptorType = VriDescriptorType_StorageBuffer,
+                                .shaderStages   = VriShaderStage_Mesh},
+                           }};
+        auto      ms = shaders.Resolve("splat_mesh", vrf::ShaderStage::Mesh, {});
+        auto      fs = shaders.Resolve("splat", vrf::ShaderStage::Fragment, {});
+        if (!ms)
+        {
+            std::fprintf(stderr, "[gaussian-splat] mesh resolve: %s\n", ms.error().message.c_str());
+            return 1;
+        }
+        if (!fs)
+        {
+            std::fprintf(stderr, "[gaussian-splat] fragment resolve: %s\n", fs.error().message.c_str());
+            return 1;
+        }
+        vrf::PipelineLayoutBuilder lb;
+        lb.SetShaderStages(VriShaderStage_Mesh | VriShaderStage_Fragment);
+        lb.AddDescriptorSet(meshSet.registerSpace, meshSet.ranges);
+        auto layout = lb.Build(device);
+        if (!layout)
+        {
+            std::fprintf(stderr, "[gaussian-splat] mesh layout: %s\n", layout.error().message.c_str());
+            return 1;
+        }
+        const VriBlendDesc blend {.enable   = VRI_TRUE,
+                                  .srcColor = VriBlendFactor_One,
+                                  .dstColor = VriBlendFactor_OneMinusSrcAlpha,
+                                  .colorOp  = VriBlendOp_Add,
+                                  .srcAlpha = VriBlendFactor_One,
+                                  .dstAlpha = VriBlendFactor_OneMinusSrcAlpha,
+                                  .alphaOp  = VriBlendOp_Add};
+        auto               pipeline = vrf::GraphicsPipelineBuilder {}
+                            .SetPipelineLayout(*layout)
+                            .AddShader(VriShaderStage_Mesh, ms->spirv, ms->spirvSize, ms->entryPoint.c_str())
+                            .AddShader(VriShaderStage_Fragment, fs->spirv, fs->spirvSize, fs->entryPoint.c_str())
+                            .SetPolygonMode(VriPolygonMode_Fill)
+                            .SetCullMode(VriCullMode_None)
+                            .SetFrontFace(VriFrontFace_CounterClockwise)
+                            .SetLineWidth(1.0f)
+                            .SetSampleCount(1)
+                            .AddColorAttachment(kHdrFormat, VriColorWrite_RGBA, blend)
+                            .Build(device);
+        if (!pipeline)
+        {
+            std::fprintf(stderr, "[gaussian-splat] mesh pipeline: %s\n", pipeline.error().message.c_str());
+            return 1;
+        }
+        auto info         = std::make_shared<vrf::fg::PipelineLayoutInfo>();
+        info->handle      = *layout;
+        info->sets        = {meshSet};
+        splatMeshPipeline = vrf::fg::PassPipeline {*pipeline, std::move(info), false};
     }
 
     // Tonemap: HDR -> swapchain (Reinhard + gamma), reusing the shared shader id.
@@ -767,10 +864,22 @@ int main(int argc, char** argv)
                     vrf::fg::bindings::RawDescriptor {pf.indexView, VriDescriptorType_StructuredBuffer};
                 rc.resourceSet[0][3] = vrf::fg::bindings::RawDescriptor {shView, VriDescriptorType_StructuredBuffer};
                 rc.BeginRendering();
-                rc.BindPipeline(splatPipeline);
-                // Instance count = visible splats, written into the draw args by the sort's
-                // frustum/size cull (CmdDrawIndirect reads it on the GPU - no CPU stall).
-                rc.device.Core().CmdDrawIndirect(rc.cmd, pf.drawArgs, 0, 1, 4 * sizeof(uint32_t));
+                if (useMesh)
+                {
+                    // The mesh shader reads the sort's visible count from drawArgs[1]; one
+                    // workgroup per kMeshGroup(32) sorted splats, groups past the count emit 0.
+                    rc.resourceSet[0][4] =
+                        vrf::fg::bindings::RawDescriptor {pf.drawArgsView, VriDescriptorType_StorageBuffer};
+                    rc.BindPipeline(splatMeshPipeline);
+                    meshIface.CmdDrawMeshTasks(rc.cmd, (splatCount + 31) / 32, 1, 1);
+                }
+                else
+                {
+                    rc.BindPipeline(splatPipeline);
+                    // Instance count = visible splats, written into the draw args by the sort's
+                    // frustum/size cull (CmdDrawIndirect reads it on the GPU - no CPU stall).
+                    rc.device.Core().CmdDrawIndirect(rc.cmd, pf.drawArgs, 0, 1, 4 * sizeof(uint32_t));
+                }
                 rc.EndRendering();
             });
         blackboard.add<SplatData>() = splatPass;
