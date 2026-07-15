@@ -71,6 +71,15 @@ namespace vrf
                VriAsGeometryFlags                 geometryFlags = VriAsGeometry_Opaque,
                VriAccelerationStructureBuildFlags buildFlags    = VriAccelerationStructureBuild_PreferFastTrace);
 
+        // Size an AS for procedural AABB geometry (custom intersection - spheres,
+        // gaussian splats). The intersection / ray-query shader tests inside each
+        // box. Buffers must carry VriBufferUsage_AccelerationBuildInput.
+        [[nodiscard]] static Expected<Blas>
+        CreateAabbs(RenderDevice&,
+                    std::vector<VriAsAabbsDesc>        geometries,
+                    VriAsGeometryFlags                 geometryFlags = VriAsGeometry_None,
+                    VriAccelerationStructureBuildFlags buildFlags    = VriAccelerationStructureBuild_PreferFastTrace);
+
         void CmdBuild(VriCommandBuffer*);
 
         [[nodiscard]] uint64_t                  DeviceAddress() const;

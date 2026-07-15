@@ -118,6 +118,45 @@ namespace vrf
         return out;
     }
 
+    Expected<Blas> Blas::CreateAabbs(RenderDevice&                            device,
+                                     std::vector<VriAsAabbsDesc>              geometries,
+                                     const VriAsGeometryFlags                 geometryFlags,
+                                     const VriAccelerationStructureBuildFlags buildFlags)
+    {
+        auto api = RayTracing::Get(device);
+        if (!api)
+        {
+            return std::unexpected(api.error());
+        }
+
+        Blas out;
+        out.m_device = &device;
+        out.m_api    = api->Api();
+
+        out.m_geometries.reserve(geometries.size());
+        for (const auto& aabbs : geometries)
+        {
+            out.m_geometries.push_back(VriAsGeometryDesc {
+                .type  = VriAsGeometryType_Aabbs,
+                .flags = geometryFlags,
+                .aabbs = aabbs,
+            });
+        }
+        out.m_desc = VriAccelerationStructureDesc {
+            .type          = VriAccelerationStructureType_BottomLevel,
+            .flags         = buildFlags,
+            .geometryCount = static_cast<uint32_t>(out.m_geometries.size()),
+            .geometries    = out.m_geometries.data(),
+        };
+
+        if (const auto r = out.m_api.CreateAccelerationStructure(device.Handle(), &out.m_desc, &out.m_as);
+            !Succeeded(r))
+        {
+            return MakeError(r, "Blas::CreateAabbs", "CreateAccelerationStructure failed");
+        }
+        return out;
+    }
+
     void Blas::CmdBuild(VriCommandBuffer* cmd)
     {
         assert(m_as);
