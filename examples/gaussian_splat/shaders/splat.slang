@@ -8,15 +8,24 @@ import vsh;
 static const float kSplatExtentStdDev = 2.8284271247461903; // ~2*sqrt(2)
 static const float kShC0              = 0.28209479177387814; // SH band-0 basis
 
+// Higher-order SH basis constants (bands 1-3), standard 3DGS convention
+// (matches NVIDIA vk_gaussian_splatting / the reference CUDA rasterizer).
+static const float kShC1    = 0.4886025119029199;
+static const float kShC2[5] = {1.0925484, -1.0925484, 0.3153916, -1.0925484, 0.5462742};
+static const float kShC3[7] = {-0.5900435899266435, 2.890611442640554,  -0.4570457994644658, 0.3731763325901154,
+                               -0.4570457994644658, 1.445305721320277,  -0.5900435899266435};
+
 struct Camera
 {
     float4x4 view;       // world -> view
     float4x4 proj;       // view -> clip (0..1 depth)
+    float3   cameraPos;  // world-space eye (SH view direction)
+    float    splatScale; // global size multiplier
     float2   focal;      // focal length in pixels (x, y)
     float2   viewport;   // render target size in pixels
-    float    splatScale; // global size multiplier
-    float    pad0;
-    float2   pad1;
+    uint     shDegree;   // 0..3 (0 = DC only)
+    uint     shStride;   // higher-order floats per point = coeffCount(shDegree) * 3
+    float2   pad0;
 };
 [[vk::binding(0, 0)]] ConstantBuffer<Camera> uCamera;
 
@@ -34,6 +43,43 @@ struct Splat
 };
 [[vk::binding(1, 0)]] StructuredBuffer<Splat> uSplats;
 [[vk::binding(2, 0)]] StructuredBuffer<uint> uSortedIndices; // back-to-front
+// Higher-order SH, flattened floats: [point][coeff][channel], channel innermost
+// (spz layout). Empty (stride 0) for DC-only clouds.
+[[vk::binding(3, 0)]] StructuredBuffer<float> uSH;
+
+// One rest-SH coefficient (rgb) for point `p`, coefficient `c` (0-based).
+float3 shCoeff(uint p, uint c)
+{
+    const uint base = p * uCamera.shStride + c * 3;
+    return float3(uSH[base + 0], uSH[base + 1], uSH[base + 2]);
+}
+
+// View-dependent color from the higher-order bands (band 0 is the DC term,
+// handled separately). `dir` = normalized world-space splat->camera direction.
+float3 evalShRest(uint p, float3 dir)
+{
+    if (uCamera.shDegree == 0)
+        return float3(0.0);
+
+    const float x = dir.x, y = dir.y, z = dir.z;
+    float3 rgb = kShC1 * (-shCoeff(p, 0) * y + shCoeff(p, 1) * z - shCoeff(p, 2) * x);
+    if (uCamera.shDegree < 2)
+        return rgb;
+
+    const float xx = x * x, yy = y * y, zz = z * z, xy = x * y, yz = y * z, xz = x * z;
+    rgb += kShC2[0] * xy * shCoeff(p, 3) + kShC2[1] * yz * shCoeff(p, 4) +
+           kShC2[2] * (2.0 * zz - xx - yy) * shCoeff(p, 5) + kShC2[3] * xz * shCoeff(p, 6) +
+           kShC2[4] * (xx - yy) * shCoeff(p, 7);
+    if (uCamera.shDegree < 3)
+        return rgb;
+
+    rgb += kShC3[0] * (3.0 * xx - yy) * y * shCoeff(p, 8) + kShC3[1] * xy * z * shCoeff(p, 9) +
+           kShC3[2] * (4.0 * zz - xx - yy) * y * shCoeff(p, 10) +
+           kShC3[3] * z * (2.0 * zz - 3.0 * xx - 3.0 * yy) * shCoeff(p, 11) +
+           kShC3[4] * x * (4.0 * zz - xx - yy) * shCoeff(p, 12) + kShC3[5] * (xx - yy) * z * shCoeff(p, 13) +
+           kShC3[6] * x * (xx - 3.0 * yy) * shCoeff(p, 14);
+    return rgb;
+}
 
 struct VSOutput
 {
@@ -78,7 +124,8 @@ VSOutput vertexMain(uint vertexId: SV_VertexID, uint instanceId: SV_InstanceID)
     o.quadPos = float2(0, 0);
     o.color   = float4(0, 0, 0, 0);
 
-    const Splat sp = uSplats[uSortedIndices[instanceId]];
+    const uint  splatIndex = uSortedIndices[instanceId];
+    const Splat sp          = uSplats[splatIndex];
 
     const float4 centerView = mul(uCamera.view, float4(sp.position, 1.0));
     if (centerView.z >= -0.01) // behind / at camera
@@ -118,8 +165,10 @@ VSOutput vertexMain(uint vertexId: SV_VertexID, uint instanceId: SV_InstanceID)
 
     float opacity = 1.0 / (1.0 + exp(-sp.opacity)); // sigmoid
     opacity *= sqrt(max(detOrig / max(detBlur, 1e-12), 0.0));
-    const float3 rgb = max(0.5 + kShC0 * sp.shDC, 0.0);
-    o.color = float4(rgb, opacity);
+    // DC term + view-dependent higher-order SH (dir = splat -> camera).
+    const float3 dir = normalize(uCamera.cameraPos - sp.position);
+    const float3 rgb = max(0.5 + kShC0 * sp.shDC + evalShRest(splatIndex, dir), 0.0);
+    o.color          = float4(rgb, opacity);
     return o;
 }
 
