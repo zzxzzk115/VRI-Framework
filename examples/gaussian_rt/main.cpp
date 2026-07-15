@@ -344,15 +344,33 @@ int main(int argc, char** argv)
     };
     rebuildBackbuffers();
 
-    // Scene bounds -> camera framing.
-    glm::vec3 lo {std::numeric_limits<float>::max()}, hi {std::numeric_limits<float>::lowest()};
-    for (const auto& s : splat.splats)
+    // Camera framing. Real 3DGS captures carry sparse far-background splats that
+    // blow up the bounding box (framing the whole cloud as a distant ball), so
+    // frame on a robust core instead: per-axis median center + the 85th-percentile
+    // distance from it. Ignores outliers; for the synthetic sphere it's ~the radius.
+    glm::vec3 center;
+    float     radius;
     {
-        lo = glm::min(lo, s.position);
-        hi = glm::max(hi, s.position);
+        const size_t       n = splat.splats.size();
+        std::vector<float> xs(n), ys(n), zs(n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            xs[i] = splat.splats[i].position.x;
+            ys[i] = splat.splats[i].position.y;
+            zs[i] = splat.splats[i].position.z;
+        }
+        const auto median = [](std::vector<float>& v) {
+            std::nth_element(v.begin(), v.begin() + v.size() / 2, v.end());
+            return v[v.size() / 2];
+        };
+        center = glm::vec3 {median(xs), median(ys), median(zs)};
+        std::vector<float> dist(n);
+        for (size_t i = 0; i < n; ++i)
+            dist[i] = glm::length(splat.splats[i].position - center);
+        const size_t k = static_cast<size_t>(static_cast<double>(n) * 0.85);
+        std::nth_element(dist.begin(), dist.begin() + static_cast<std::ptrdiff_t>(k), dist.end());
+        radius = dist[k] + 1e-3f;
     }
-    const glm::vec3 center = 0.5f * (lo + hi);
-    const float     radius = 0.5f * glm::length(hi - lo) + 1e-3f;
 
     bool        builtAs    = false;
     const auto  start      = std::chrono::steady_clock::now();
@@ -382,11 +400,13 @@ int main(int argc, char** argv)
 
         const float     seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
         const float     angle   = seconds * 0.5f;
-        const glm::vec3 eye     = center + glm::vec3 {std::cos(angle), 0.25f, std::sin(angle)} * (radius * 2.6f);
+        const glm::vec3 eye     = center + glm::vec3 {std::cos(angle), 0.25f, std::sin(angle)} * (radius * 2.4f);
         const float     aspect  = static_cast<float>(kExtent.width) / static_cast<float>(kExtent.height);
         const glm::mat4 view    = glm::lookAt(eye, center, glm::vec3 {0, 1, 0});
-        glm::mat4       proj    = glm::perspective(glm::radians(50.0f), aspect, 0.05f, 1000.0f);
-        proj[1][1] *= -1.0f;
+        // NOTE: no proj[1][1] *= -1 here. That flip compensates the rasterizer's
+        // inverted-Y framebuffer; this compute ray tracer builds rays straight from
+        // invViewProj (no framebuffer flip), so applying it would render upside down.
+        const glm::mat4 proj = glm::perspective(glm::radians(50.0f), aspect, 0.05f, 1000.0f);
 
         // Build the AS once (aabb_gen compute -> BLAS/TLAS build).
         if (!builtAs)
