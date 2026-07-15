@@ -9,7 +9,7 @@ local vri_configs = {
     d3d12  = has_config("vrf_backend_d3d12"),
     metal  = has_config("vrf_backend_metal"),
 }
-add_requires("vri v0.1.4", {configs = vri_configs})
+add_requires("vri master", {configs = vri_configs})
 
 -- glm: math types used across the framework's public API.
 add_requires("glm")
