@@ -1,14 +1,16 @@
 // vrf gaussian_splat - a real 3D Gaussian Splatting renderer on the vrf
 // framegraph: each splat is an instanced quad expanded to its projected 2D
 // covariance ellipse, gaussian-weighted, premultiplied over-blended back-to-
-// front (host CPU depth sort per frame) into an HDR target, then tonemapped to
-// the swapchain. This is the core EWA splat raster (Zwicker et al.), the
-// distinctive feature of libvultra dev-next, brought onto VRI-Framework.
+// front (host CPU depth sort per frame) into a color target, then presented
+// directly. This is the core EWA splat raster (Zwicker et al.).
+//
+// Color is display-referred: SH DC -> 0.5 + C0*dc is already the sRGB display
+// value (as in NVIDIA vk_gaussian_splatting), so the present pass copies it
+// straight through - NO tonemapping (Reinhard would desaturate/wash it out).
 //
 // View-dependent SH (bands 0-3) is evaluated per splat. Depth ordering is a
-// per-frame CPU sort for now; a GPU radix sort (vrdx, as NVIDIA's sample uses)
-// is the next upgrade. Loads a .ply/.spz/.splat from argv[1] if given, else
-// generates a synthetic colored sphere of splats.
+// per-frame CPU sort for now; a GPU radix sort is the next upgrade. Loads a
+// .ply/.spz/.splat from argv[1] if given, else generates a synthetic sphere.
 //
 // Set VRF_EXAMPLE_AUTO_EXIT to run a few seconds and quit (CI/verification).
 #include <algorithm>
@@ -368,10 +370,10 @@ int main(int argc, char** argv)
     }
 
     // Tonemap: HDR -> swapchain (Reinhard + gamma), reusing the shared shader id.
-    vrf::fg::PassPipeline tonemapPipeline;
+    vrf::fg::PassPipeline presentPipeline;
     {
-        auto vs = shaders.Resolve("tonemap", vrf::ShaderStage::Vertex, {});
-        auto fs = shaders.Resolve("tonemap", vrf::ShaderStage::Fragment, {});
+        auto vs = shaders.Resolve("present", vrf::ShaderStage::Vertex, {});
+        auto fs = shaders.Resolve("present", vrf::ShaderStage::Fragment, {});
         if (!vs || !fs)
         {
             std::fprintf(stderr, "[gaussian-splat] tonemap shader resolve failed\n");
@@ -408,7 +410,7 @@ int main(int argc, char** argv)
         auto info       = std::make_shared<vrf::fg::PipelineLayoutInfo>();
         info->handle    = *layout;
         info->sets      = {tset};
-        tonemapPipeline = vrf::fg::PassPipeline {*pipeline, std::move(info), false};
+        presentPipeline = vrf::fg::PassPipeline {*pipeline, std::move(info), false};
     }
 
     // ---- frame loop --------------------------------------------------------
@@ -539,7 +541,7 @@ int main(int argc, char** argv)
             [&](const auto&, FrameGraphPassResources&, void* ctx) {
                 auto& rc = *static_cast<vrf::fg::RenderContext*>(ctx);
                 rc.SetSampler(0, 1, samplers["linearClamp"]);
-                rc.RenderFullScreenPostProcess(tonemapPipeline);
+                rc.RenderFullScreenPostProcess(presentPipeline);
             });
 
         graph.compile();
@@ -571,7 +573,7 @@ int main(int argc, char** argv)
     core.DestroyBuffer(shBuffer);
     for (auto& [_, sampler] : samplers)
         core.DestroyDescriptor(sampler);
-    for (const auto* p : {&splatPipeline, &tonemapPipeline})
+    for (const auto* p : {&splatPipeline, &presentPipeline})
     {
         core.DestroyPipeline(p->pipeline);
         core.DestroyPipelineLayout(p->layout->handle);
