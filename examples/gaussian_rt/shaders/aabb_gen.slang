@@ -4,7 +4,8 @@
 // (in gaussian_rt.slang) does the real gaussian intersection.
 import vsh;
 
-static const float kBoundStdDev = 3.0; // clip each gaussian at 3 sigma
+static const float kMaxStdDev        = 3.0;         // never exceed 3 sigma
+static const float kMinContribution  = 1.0 / 255.0; // clip where sigmoid(opacity)*response < one 8-bit step
 
 struct Params
 {
@@ -30,8 +31,15 @@ struct Splat // 64-byte GaussianSplatPoint
     if (i >= uP.count)
         return;
 
-    const Splat  sp = uSplats[i];
-    const float3 s  = exp(sp.scale) * kBoundStdDev;
+    const Splat sp = uSplats[i];
+
+    // Opacity-aware bound: a gaussian's screen contribution is sigmoid(opacity) *
+    // exp(-0.5 * r^2) at r std devs. Clip where that drops below one 8-bit step, so
+    // faint / low-opacity splats get much smaller boxes (fewer ray-box tests) while
+    // opaque ones stay at the 3-sigma cap. r = sqrt(2 * ln(alpha / kMinContribution)).
+    const float alpha = 1.0 / (1.0 + exp(-sp.opacity));
+    const float nsig  = (alpha > kMinContribution) ? min(sqrt(2.0 * log(alpha / kMinContribution)), kMaxStdDev) : 0.0;
+    const float3 s    = exp(sp.scale) * nsig;
 
     // Rotate the per-axis extents by |R| to get the world-space AABB half-size:
     // half = |R| * s, where |R| is the elementwise-abs rotation matrix.
