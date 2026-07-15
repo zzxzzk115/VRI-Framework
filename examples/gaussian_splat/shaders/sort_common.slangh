@@ -1,0 +1,53 @@
+// Shared bindings + helpers for the GPU splat depth sort (a single-pass counting
+// sort over 16-bit quantized view depth, 65536 buckets). #included by the six
+// per-stage entry-point shaders (clear/histogram/scanLocal/scanBlocks/
+// buildOffset/scatter) - each stage is its own .slang file because the shader
+// library keys entry points by (file, stage), so same-stage entries must not
+// share a file.
+#pragma once
+import vsh;
+
+static const uint kBuckets   = 65536;
+static const uint kBlockSize = 256;
+
+struct SortParams
+{
+    float4x4 view;
+    uint     count;
+    float    nearZ;
+    float    farZ;
+    float    pad;
+};
+[[vk::push_constant]] ConstantBuffer<SortParams> uP;
+
+// Full 64-byte GaussianSplatPoint so the structured-buffer stride matches the
+// shared splat buffer (only position is read here).
+struct Splat
+{
+    float3 position;
+    float  opacity;
+    float3 scale;
+    float  pad0;
+    float4 rotation;
+    float3 shDC;
+    float  pad1;
+};
+[[vk::binding(0, 0)]] StructuredBuffer<Splat> uSplats;
+[[vk::binding(1, 0)]] RWStructuredBuffer<uint> uHisto;       // [65536] counts -> exclusive local scan
+[[vk::binding(2, 0)]] RWStructuredBuffer<uint> uBlockSum;    // [256]
+[[vk::binding(3, 0)]] RWStructuredBuffer<uint> uBlockOffset; // [256]
+[[vk::binding(4, 0)]] RWStructuredBuffer<uint> uOffset;      // [65536] final exclusive offsets
+[[vk::binding(5, 0)]] RWStructuredBuffer<uint> uBucket;      // [count] per-splat bucket
+[[vk::binding(6, 0)]] RWStructuredBuffer<uint> uSorted;      // [count] output indices
+
+uint depthBucket(uint i)
+{
+    const float3 p = uSplats[i].position;
+    // Layout-safe view-space z: mul() applies the matrix regardless of the
+    // matrix memory layout (manual m[row].z indexing would pick the wrong axis).
+    const float viewZ = mul(uP.view, float4(p, 1.0)).z;
+    const float dist  = -viewZ; // looking down -z: larger = farther
+    const float  t     = saturate((dist - uP.nearZ) / max(uP.farZ - uP.nearZ, 1e-6));
+    // Far (t=1) -> bucket 0 so ascending bucket order is back-to-front.
+    return uint(clamp((1.0 - t) * float(kBuckets - 1), 0.0, float(kBuckets - 1)));
+}

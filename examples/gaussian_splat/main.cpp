@@ -1,16 +1,17 @@
 // vrf gaussian_splat - a real 3D Gaussian Splatting renderer on the vrf
 // framegraph: each splat is an instanced quad expanded to its projected 2D
 // covariance ellipse, gaussian-weighted, premultiplied over-blended back-to-
-// front (host CPU depth sort per frame) into a color target, then presented
-// directly. This is the core EWA splat raster (Zwicker et al.).
+// front into a color target, then presented directly. This is the core EWA
+// splat raster (Zwicker et al.).
 //
 // Color is display-referred: SH DC -> 0.5 + C0*dc is already the sRGB display
 // value (as in NVIDIA vk_gaussian_splatting), so the present pass copies it
 // straight through - NO tonemapping (Reinhard would desaturate/wash it out).
 //
 // View-dependent SH (bands 0-3) is evaluated per splat. Depth ordering is a
-// per-frame CPU sort for now; a GPU radix sort is the next upgrade. Loads a
-// .ply/.spz/.splat from argv[1] if given, else generates a synthetic sphere.
+// GPU counting sort over 16-bit quantized depth (splat_sort.* + the new
+// ComputePipelineBuilder), recorded before the raster each frame - no CPU sort.
+// Loads a .ply/.spz/.splat from argv[1], else generates a synthetic sphere.
 //
 // Set VRF_EXAMPLE_AUTO_EXIT to run a few seconds and quit (CI/verification).
 #include <algorithm>
@@ -20,6 +21,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <numeric>
 #include <vector>
@@ -35,6 +37,7 @@
 #include <vrf/fg/framegraph_texture.hpp>
 #include <vrf/fg/render_context.hpp>
 #include <vrf/fg/transient_resources.hpp>
+#include <vrf/gpu/builders/compute_pipeline_builder.hpp>
 #include <vrf/gpu/builders/graphics_pipeline_builder.hpp>
 #include <vrf/gpu/builders/pipeline_layout_builder.hpp>
 #include <vrf/gpu/frame_stream.hpp>
@@ -63,6 +66,16 @@ namespace
         uint32_t  shDegree;
         uint32_t  shStride; // higher-order floats per point = coeffCount * 3
         glm::vec2 pad0;
+    };
+
+    // Push constant for the GPU sort - must match SortParams in splat_sort.slang.
+    struct SortParams
+    {
+        glm::mat4 view;
+        uint32_t  count;
+        float     nearZ;
+        float     farZ;
+        float     pad;
     };
 
     // Rest-SH coefficient count per point (excludes DC), by SH degree.
@@ -279,13 +292,33 @@ int main(int argc, char** argv)
         core.CreateBufferView(device.Handle(), &v, &shView);
     }
 
-    // Per-frame-slot: camera UBO + sorted-index buffer (rewritten each frame after Begin()).
+    // GPU depth sort scratch (per frame-in-flight slot): 16-bit counting sort.
+    constexpr uint32_t kSortBuckets = 65536;
+    constexpr uint32_t kSortBlocks  = kSortBuckets / 256;
+
+    // Per-frame-slot: camera UBO + sorted-index buffer + sort scratch (all
+    // rewritten each frame after Begin(), which waited for this slot's prev frame).
     struct PerFrame
     {
-        VriBuffer*     camera     = nullptr;
-        VriDescriptor* cameraView = nullptr;
-        VriBuffer*     indices    = nullptr;
-        VriDescriptor* indexView  = nullptr;
+        VriBuffer*     camera       = nullptr;
+        VriDescriptor* cameraView   = nullptr;
+        VriBuffer*     indices      = nullptr; // sorted output (= scatter target)
+        VriDescriptor* indexView    = nullptr;
+        VriBuffer*     histo        = nullptr;
+        VriDescriptor* histoView    = nullptr;
+        VriBuffer*     blockSum     = nullptr;
+        VriDescriptor* blockSumView = nullptr;
+        VriBuffer*     blockOff     = nullptr;
+        VriDescriptor* blockOffView = nullptr;
+        VriBuffer*     offset       = nullptr;
+        VriDescriptor* offsetView   = nullptr;
+        VriBuffer*     bucket       = nullptr;
+        VriDescriptor* bucketView   = nullptr;
+    };
+    auto makeScratch = [&](uint64_t elems, VriBuffer*& buf, VriDescriptor*& view) {
+        buf = makeHostBuffer(device, elems * sizeof(uint32_t), VriBufferUsage_StorageBuffer, sizeof(uint32_t), nullptr);
+        const VriBufferViewDesc v {.buffer = buf, .viewType = VriDescriptorType_StorageBuffer};
+        core.CreateBufferView(device.Handle(), &v, &view);
     };
     std::vector<PerFrame> perFrame(kFramesInFlight);
     for (auto& pf : perFrame)
@@ -294,10 +327,32 @@ int main(int argc, char** argv)
         const VriBufferViewDesc cv {.buffer = pf.camera, .viewType = VriDescriptorType_ConstantBuffer};
         core.CreateBufferView(device.Handle(), &cv, &pf.cameraView);
 
+        // indices is both the render input (StructuredBuffer) and scatter output (StorageBuffer).
         pf.indices = makeHostBuffer(
             device, uint64_t {splatCount} * sizeof(uint32_t), VriBufferUsage_StorageBuffer, sizeof(uint32_t), nullptr);
         const VriBufferViewDesc iv {.buffer = pf.indices, .viewType = VriDescriptorType_StructuredBuffer};
         core.CreateBufferView(device.Handle(), &iv, &pf.indexView);
+
+        makeScratch(kSortBuckets, pf.histo, pf.histoView);
+        makeScratch(kSortBlocks, pf.blockSum, pf.blockSumView);
+        makeScratch(kSortBlocks, pf.blockOff, pf.blockOffView);
+        makeScratch(kSortBuckets, pf.offset, pf.offsetView);
+        makeScratch(splatCount, pf.bucket, pf.bucketView);
+    }
+
+    // A StorageBuffer view of the sorted-index buffer for the scatter stage
+    // (pf.indexView above is a StructuredBuffer view for the vertex shader).
+    std::vector<VriDescriptor*> sortedRWView(kFramesInFlight, nullptr);
+    for (uint32_t i = 0; i < kFramesInFlight; ++i)
+    {
+        const VriBufferViewDesc v {.buffer = perFrame[i].indices, .viewType = VriDescriptorType_StorageBuffer};
+        core.CreateBufferView(device.Handle(), &v, &sortedRWView[i]);
+    }
+    // Read-only structured view of the splat buffer for the sort (binding 0).
+    VriDescriptor* splatSortView = nullptr;
+    {
+        const VriBufferViewDesc v {.buffer = splatBuffer, .viewType = VriDescriptorType_StructuredBuffer};
+        core.CreateBufferView(device.Handle(), &v, &splatSortView);
     }
 
     // ---- splat pipeline: instanced quad, premultiplied over-blend ----------
@@ -413,6 +468,135 @@ int main(int argc, char** argv)
         presentPipeline = vrf::fg::PassPipeline {*pipeline, std::move(info), false};
     }
 
+    // ---- GPU sort: one layout (7 storage buffers + push constant), 6 pipelines --
+    auto sortLayoutInfo  = std::make_shared<vrf::fg::PipelineLayoutInfo>();
+    sortLayoutInfo->sets = {Set {0,
+                                 {
+                                     {.baseRegister   = 0,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StructuredBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
+                                     {.baseRegister   = 1,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StorageBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
+                                     {.baseRegister   = 2,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StorageBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
+                                     {.baseRegister   = 3,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StorageBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
+                                     {.baseRegister   = 4,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StorageBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
+                                     {.baseRegister   = 5,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StorageBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
+                                     {.baseRegister   = 6,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StorageBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
+                                 }}};
+    {
+        std::vector<VriDescriptorSetDesc> sets;
+        sets.push_back({.registerSpace = 0,
+                        .ranges        = sortLayoutInfo->sets[0].ranges.data(),
+                        .rangeNum      = static_cast<uint32_t>(sortLayoutInfo->sets[0].ranges.size())});
+        const VriPushConstantDesc push {
+            .baseRegister = 0, .size = sizeof(SortParams), .shaderStages = VriShaderStage_Compute};
+        const VriPipelineLayoutDesc ld {.descriptorSets   = sets.data(),
+                                        .descriptorSetNum = 1,
+                                        .pushConstants    = &push,
+                                        .pushConstantNum  = 1,
+                                        .shaderStages     = VriShaderStage_Compute};
+        if (!vrf::Succeeded(core.CreatePipelineLayout(device.Handle(), &ld, &sortLayoutInfo->handle)))
+        {
+            std::fprintf(stderr, "[gaussian-splat] sort layout failed\n");
+            return 1;
+        }
+    }
+    const char* kSortStages[6] = {
+        "sort_clear", "sort_histogram", "sort_scanlocal", "sort_scanblocks", "sort_buildoffset", "sort_scatter"};
+    VriPipeline* sortPipelines[6] {};
+    for (int s = 0; s < 6; ++s)
+    {
+        auto cs = shaders.Resolve(kSortStages[s], vrf::ShaderStage::Compute, {});
+        if (!cs)
+        {
+            std::fprintf(stderr, "[gaussian-splat] sort shader '%s' resolve failed\n", kSortStages[s]);
+            return 1;
+        }
+        auto p = vrf::ComputePipelineBuilder {}
+                     .SetPipelineLayout(sortLayoutInfo->handle)
+                     .SetShader(cs->spirv, cs->spirvSize, cs->entryPoint.c_str())
+                     .Build(device);
+        if (!p)
+        {
+            std::fprintf(
+                stderr, "[gaussian-splat] sort pipeline '%s': %s\n", kSortStages[s], p.error().message.c_str());
+            return 1;
+        }
+        sortPipelines[s] = *p;
+    }
+
+    // Record the 6-stage sort into `cmd`, writing sorted indices into slot `pf`.
+    auto recordSort =
+        [&](VriCommandBuffer* cmd, vrf::fg::RenderContext& rc, PerFrame& pf, uint32_t slot, const SortParams& sp) {
+            // Compute-to-compute RAW/WAR barrier over every sort scratch buffer.
+            VriBuffer* const sortBufs[6] = {pf.histo, pf.blockSum, pf.blockOff, pf.offset, pf.bucket, pf.indices};
+            const auto       barrier     = [&] {
+                VriBufferBarrierDesc bb[6];
+                for (int k = 0; k < 6; ++k)
+                    bb[k] = {.buffer = sortBufs[k],
+                                       .before = {VriAccess_ShaderResourceStorageWrite, VriPipelineStage_ComputeShader},
+                                       .after = {VriAccess_ShaderResourceStorageRead | VriAccess_ShaderResourceStorageWrite,
+                                       VriPipelineStage_ComputeShader}};
+                const VriBarrierGroupDesc bg {.buffers = bb, .bufferNum = 6};
+                core.CmdBarrier(cmd, &bg);
+            };
+            core.CmdSetPipelineLayout(cmd, sortLayoutInfo->handle);
+            rc.resourceSet[0][0] = vrf::fg::bindings::RawDescriptor {splatSortView, VriDescriptorType_StructuredBuffer};
+            rc.resourceSet[0][1] = vrf::fg::bindings::RawDescriptor {pf.histoView, VriDescriptorType_StorageBuffer};
+            rc.resourceSet[0][2] = vrf::fg::bindings::RawDescriptor {pf.blockSumView, VriDescriptorType_StorageBuffer};
+            rc.resourceSet[0][3] = vrf::fg::bindings::RawDescriptor {pf.blockOffView, VriDescriptorType_StorageBuffer};
+            rc.resourceSet[0][4] = vrf::fg::bindings::RawDescriptor {pf.offsetView, VriDescriptorType_StorageBuffer};
+            rc.resourceSet[0][5] = vrf::fg::bindings::RawDescriptor {pf.bucketView, VriDescriptorType_StorageBuffer};
+            rc.resourceSet[0][6] =
+                vrf::fg::bindings::RawDescriptor {sortedRWView[slot], VriDescriptorType_StorageBuffer};
+            core.CmdSetPipeline(cmd, sortPipelines[0]);
+            rc.BindPipeline(vrf::fg::PassPipeline {sortPipelines[0], sortLayoutInfo, true});
+            core.CmdSetConstants(cmd, 0, &sp, sizeof(sp));
+
+            const uint32_t        bucketGroups = kSortBuckets / 256;
+            const uint32_t        splatGroups  = (sp.count + 255) / 256;
+            const VriDispatchDesc dClear {.x = bucketGroups, .y = 1, .z = 1};
+            core.CmdDispatch(cmd, &dClear);
+            barrier();
+            core.CmdSetPipeline(cmd, sortPipelines[1]); // histogram
+            const VriDispatchDesc dHist {.x = splatGroups, .y = 1, .z = 1};
+            core.CmdDispatch(cmd, &dHist);
+            barrier();
+            core.CmdSetPipeline(cmd, sortPipelines[2]); // scanLocal
+            core.CmdDispatch(cmd, &dClear);             // 256 blocks = bucketGroups
+            barrier();
+            core.CmdSetPipeline(cmd, sortPipelines[3]); // scanBlocks (1 group)
+            const VriDispatchDesc dOne {.x = 1, .y = 1, .z = 1};
+            core.CmdDispatch(cmd, &dOne);
+            barrier();
+            core.CmdSetPipeline(cmd, sortPipelines[4]); // buildOffset
+            core.CmdDispatch(cmd, &dClear);
+            barrier();
+            core.CmdSetPipeline(cmd, sortPipelines[5]); // scatter
+            core.CmdDispatch(cmd, &dHist);
+            barrier();
+        };
+
+    bool sortValidated = false; // frame-0 GPU-vs-CPU check
+
     // ---- frame loop --------------------------------------------------------
     const auto start      = std::chrono::steady_clock::now();
     uint64_t   frameCount = 0;
@@ -420,6 +604,17 @@ int main(int argc, char** argv)
 
     std::vector<uint32_t> order(splatCount);
     std::vector<float>    viewZ(splatCount);
+
+    // Scene bounds (one-time) for the sort's depth quantization range.
+    glm::vec3 sceneMin {std::numeric_limits<float>::max()};
+    glm::vec3 sceneMax {std::numeric_limits<float>::lowest()};
+    for (const auto& s : splat.splats)
+    {
+        sceneMin = glm::min(sceneMin, s.position);
+        sceneMax = glm::max(sceneMax, s.position);
+    }
+    const glm::vec3 sceneCenter = 0.5f * (sceneMin + sceneMax);
+    const float     sceneRadius = 0.5f * glm::length(sceneMax - sceneMin) + 1e-3f;
 
     while (!window.ShouldClose())
     {
@@ -473,18 +668,25 @@ int main(int argc, char** argv)
         std::memcpy(core.MapBuffer(pf.camera, 0, sizeof(camBlock)), &camBlock, sizeof(camBlock));
         core.UnmapBuffer(pf.camera);
 
-        // CPU back-to-front sort by view-space depth (farthest first).
-        for (uint32_t i = 0; i < splatCount; ++i)
+        // GPU back-to-front sort: 6-stage counting sort over quantized depth,
+        // recorded into cmd before the graph's splat pass reads pf.indices.
+        const float distToCenter = glm::length(eye - sceneCenter);
+        SortParams  sp {};
+        sp.view  = view;
+        sp.count = splatCount;
+        sp.nearZ = std::max(0.01f, distToCenter - sceneRadius);
+        sp.farZ  = distToCenter + sceneRadius;
+        recordSort(cmd, renderContext, pf, frames.FrameIndex(), sp);
+
+        // scatter (compute-write) -> vertex-shader read of the sorted indices.
         {
-            const glm::vec3& p = splat.splats[i].position;
-            viewZ[i]           = view[0].z * p.x + view[1].z * p.y + view[2].z * p.z + view[3].z;
+            const VriBufferBarrierDesc bb {
+                .buffer = pf.indices,
+                .before = {VriAccess_ShaderResourceStorageWrite, VriPipelineStage_ComputeShader},
+                .after  = {VriAccess_ShaderResourceRead, VriPipelineStage_VertexShader}};
+            const VriBarrierGroupDesc bg {.buffers = &bb, .bufferNum = 1};
+            core.CmdBarrier(cmd, &bg);
         }
-        std::iota(order.begin(), order.end(), 0u);
-        std::sort(order.begin(), order.end(), [&](uint32_t a, uint32_t b) { return viewZ[a] < viewZ[b]; });
-        std::memcpy(core.MapBuffer(pf.indices, 0, order.size() * sizeof(uint32_t)),
-                    order.data(),
-                    order.size() * sizeof(uint32_t));
-        core.UnmapBuffer(pf.indices);
 
         // ---- graph: splat raster -> tonemap -------------------------------
         FrameGraph           graph;
@@ -553,6 +755,39 @@ int main(int argc, char** argv)
         swapchain.Present();
         ++frameCount;
 
+        // Frame-0 validation: the GPU sort must produce back-to-front order.
+        // Verify view-space depth is monotonically non-decreasing (far -> near).
+        if (!sortValidated)
+        {
+            sortValidated = true;
+            device.WaitIdle();
+            const auto* sorted =
+                static_cast<const uint32_t*>(core.MapBuffer(pf.indices, 0, uint64_t {splatCount} * sizeof(uint32_t)));
+            // Check bucket-level monotonicity (intra-bucket order is arbitrary by
+            // design and visually irrelevant - buckets are sub-pixel depth slices).
+            const auto bucketOf = [&](uint32_t idx) {
+                const glm::vec3& p    = splat.splats[idx].position;
+                const float      vz   = view[0].z * p.x + view[1].z * p.y + view[2].z * p.z + view[3].z;
+                const float      dist = -vz;
+                const float      t    = std::clamp((dist - sp.nearZ) / std::max(sp.farZ - sp.nearZ, 1e-6f), 0.0f, 1.0f);
+                return static_cast<uint32_t>(std::clamp((1.0f - t) * 65535.0f, 0.0f, 65535.0f));
+            };
+            uint32_t bucketInversions = 0;
+            uint32_t prevBucket       = 0;
+            for (uint32_t k = 0; k < splatCount; ++k)
+            {
+                const uint32_t b = bucketOf(sorted[k]);
+                if (b < prevBucket)
+                    ++bucketInversions;
+                prevBucket = b;
+            }
+            core.UnmapBuffer(pf.indices);
+            std::printf("[gaussian-splat] GPU sort check: %u bucket-order inversions across %u splats "
+                        "(0 = correct back-to-front)\n",
+                        bucketInversions,
+                        splatCount);
+        }
+
         if (autoExit && std::chrono::steady_clock::now() - start > std::chrono::seconds(5))
             break;
     }
@@ -560,17 +795,33 @@ int main(int argc, char** argv)
     device.WaitIdle();
     std::printf("[gaussian-splat] frames: %llu, splats: %u\n", static_cast<unsigned long long>(frameCount), splatCount);
 
-    for (auto& pf : perFrame)
+    for (uint32_t i = 0; i < kFramesInFlight; ++i)
     {
+        PerFrame& pf = perFrame[i];
         core.DestroyDescriptor(pf.cameraView);
         core.DestroyDescriptor(pf.indexView);
+        core.DestroyDescriptor(pf.histoView);
+        core.DestroyDescriptor(pf.blockSumView);
+        core.DestroyDescriptor(pf.blockOffView);
+        core.DestroyDescriptor(pf.offsetView);
+        core.DestroyDescriptor(pf.bucketView);
+        core.DestroyDescriptor(sortedRWView[i]);
         core.DestroyBuffer(pf.camera);
         core.DestroyBuffer(pf.indices);
+        core.DestroyBuffer(pf.histo);
+        core.DestroyBuffer(pf.blockSum);
+        core.DestroyBuffer(pf.blockOff);
+        core.DestroyBuffer(pf.offset);
+        core.DestroyBuffer(pf.bucket);
     }
     core.DestroyDescriptor(splatView);
+    core.DestroyDescriptor(splatSortView);
     core.DestroyBuffer(splatBuffer);
     core.DestroyDescriptor(shView);
     core.DestroyBuffer(shBuffer);
+    for (VriPipeline* p : sortPipelines)
+        core.DestroyPipeline(p);
+    core.DestroyPipelineLayout(sortLayoutInfo->handle);
     for (auto& [_, sampler] : samplers)
         core.DestroyDescriptor(sampler);
     for (const auto* p : {&splatPipeline, &presentPipeline})
