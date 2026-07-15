@@ -48,17 +48,35 @@ namespace
 
     constexpr float kShC0 = 0.28209479177387814f;
 
-    // Camera UBO - must match Camera in splat.slang (std140-friendly, 160 bytes).
+    // Camera UBO - must match Camera in splat.slang (std140-friendly).
     struct CameraBlock
     {
         glm::mat4 view;
         glm::mat4 proj;
+        glm::vec3 cameraPos;
+        float     splatScale;
         glm::vec2 focal;
         glm::vec2 viewport;
-        float     splatScale;
-        float     pad0;
-        glm::vec2 pad1;
+        uint32_t  shDegree;
+        uint32_t  shStride; // higher-order floats per point = coeffCount * 3
+        glm::vec2 pad0;
     };
+
+    // Rest-SH coefficient count per point (excludes DC), by SH degree.
+    uint32_t restCoeffCount(int degree)
+    {
+        switch (degree)
+        {
+            case 1:
+                return 3;
+            case 2:
+                return 8;
+            case 3:
+                return 15;
+            default:
+                return 0;
+        }
+    }
 
     // A synthetic colored sphere of splats: points on a fibonacci sphere, each a
     // small disk tangent to the surface, colored by direction. Enough to show the
@@ -68,7 +86,9 @@ namespace
         vrf::GaussianSplat out;
         out.name      = "synthetic-sphere";
         out.numPoints = static_cast<int32_t>(count);
+        out.shDegree  = 1; // one rest band, to exercise view-dependent SH
         out.splats.reserve(count);
+        out.sh.assign(static_cast<size_t>(count) * 3 * 3, 0.0f); // 3 coeffs x 3 channels
 
         const float golden = 3.14159265358979f * (3.0f - std::sqrt(5.0f));
         for (uint32_t i = 0; i < count; ++i)
@@ -88,6 +108,13 @@ namespace
             const glm::vec3 color = 0.5f + 0.5f * n;
             p.shDC                = (color - 0.5f) / kShC0;
             out.splats.push_back(p);
+
+            // Degree-1 SH: put a red/blue tint on the x-direction coefficient
+            // (coeff 2, the -x basis) so color visibly shifts as the camera
+            // orbits. Layout: [coeff][channel], channel innermost.
+            const size_t shBase        = static_cast<size_t>(i) * 3 * 3;
+            out.sh[shBase + 2 * 3 + 0] = 0.9f;  // coeff 2, R
+            out.sh[shBase + 2 * 3 + 2] = -0.9f; // coeff 2, B
         }
         return out;
     }
@@ -237,6 +264,18 @@ int main(int argc, char** argv)
         core.CreateBufferView(device.Handle(), &v, &splatView);
     }
 
+    // Higher-order SH coefficients (empty clouds still get a 1-float dummy so the
+    // binding is always valid; the shader gates reads on shDegree/shStride).
+    const uint32_t     shStride = restCoeffCount(splat.shDegree) * 3;
+    std::vector<float> shData   = splat.sh.empty() ? std::vector<float> {0.0f} : splat.sh;
+    VriBuffer*         shBuffer = makeHostBuffer(
+        device, shData.size() * sizeof(float), VriBufferUsage_StorageBuffer, sizeof(float), shData.data());
+    VriDescriptor* shView = nullptr;
+    {
+        const VriBufferViewDesc v {.buffer = shBuffer, .viewType = VriDescriptorType_StructuredBuffer};
+        core.CreateBufferView(device.Handle(), &v, &shView);
+    }
+
     // Per-frame-slot: camera UBO + sorted-index buffer (rewritten each frame after Begin()).
     struct PerFrame
     {
@@ -271,6 +310,10 @@ int main(int argc, char** argv)
                              .descriptorType = VriDescriptorType_StructuredBuffer,
                              .shaderStages   = VriShaderStage_Vertex},
                             {.baseRegister   = 2,
+                             .descriptorNum  = 1,
+                             .descriptorType = VriDescriptorType_StructuredBuffer,
+                             .shaderStages   = VriShaderStage_Vertex},
+                            {.baseRegister   = 3,
                              .descriptorNum  = 1,
                              .descriptorType = VriDescriptorType_StructuredBuffer,
                              .shaderStages   = VriShaderStage_Vertex},
@@ -417,10 +460,13 @@ int main(int argc, char** argv)
         CameraBlock camBlock {};
         camBlock.view       = view;
         camBlock.proj       = proj;
+        camBlock.cameraPos  = eye;
         const float focalY  = 0.5f * static_cast<float>(extent.height) / std::tan(0.5f * fovY);
         camBlock.focal      = glm::vec2 {focalY, focalY};
         camBlock.viewport   = glm::vec2 {static_cast<float>(extent.width), static_cast<float>(extent.height)};
         camBlock.splatScale = 1.0f;
+        camBlock.shDegree   = static_cast<uint32_t>(splat.shDegree);
+        camBlock.shStride   = shStride;
         std::memcpy(core.MapBuffer(pf.camera, 0, sizeof(camBlock)), &camBlock, sizeof(camBlock));
         core.UnmapBuffer(pf.camera);
 
@@ -466,6 +512,7 @@ int main(int argc, char** argv)
                 rc.resourceSet[0][1] = vrf::fg::bindings::RawDescriptor {splatView, VriDescriptorType_StructuredBuffer};
                 rc.resourceSet[0][2] =
                     vrf::fg::bindings::RawDescriptor {pf.indexView, VriDescriptorType_StructuredBuffer};
+                rc.resourceSet[0][3] = vrf::fg::bindings::RawDescriptor {shView, VriDescriptorType_StructuredBuffer};
                 rc.BeginRendering();
                 rc.BindPipeline(splatPipeline);
                 const VriDrawDesc draw {.vertexNum = 4, .instanceNum = splatCount};
@@ -519,6 +566,8 @@ int main(int argc, char** argv)
     }
     core.DestroyDescriptor(splatView);
     core.DestroyBuffer(splatBuffer);
+    core.DestroyDescriptor(shView);
+    core.DestroyBuffer(shBuffer);
     for (auto& [_, sampler] : samplers)
         core.DestroyDescriptor(sampler);
     for (const auto* p : {&splatPipeline, &tonemapPipeline})
