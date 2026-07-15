@@ -23,9 +23,10 @@ struct Camera
     float    splatScale; // global size multiplier
     float2   focal;      // focal length in pixels (x, y)
     float2   viewport;   // render target size in pixels
-    uint     shDegree;   // 0..3 (0 = DC only)
-    uint     shStride;   // higher-order floats per point = coeffCount(shDegree) * 3
-    float2   pad0;
+    uint     shDegree;    // 0..3 (0 = DC only)
+    uint     shStride;    // higher-order floats per point = coeffCount(shDegree) * 3
+    uint     antialiased; // 1 = Mip-Splatting opacity compensation, 0 = classic 3DGS
+    uint     pad0;
 };
 [[vk::binding(0, 0)]] ConstantBuffer<Camera> uCamera;
 
@@ -134,7 +135,10 @@ VSOutput vertexMain(uint vertexId: SV_VertexID, uint instanceId: SV_InstanceID)
     const float3x3 cov3D = covariance3D(sp.scale, sp.rotation);
     float3 cov2 = covariance2D(cov3D, centerView.xyz, uCamera.focal, uCamera.view);
 
-    // low-pass blur (dilate by 0.3px) + opacity compensation
+    // Low-pass blur: dilate the 2D covariance by 0.3px (both antialiased and classic
+    // modes do this to keep sub-pixel splats from vanishing). The opacity compensation
+    // that accounts for the energy this adds is Mip-Splatting-specific and applied
+    // below only when the asset was trained antialiased.
     const float detOrig = cov2.x * cov2.z - cov2.y * cov2.y;
     cov2.x += 0.3;
     cov2.z += 0.3;
@@ -164,7 +168,8 @@ VSOutput vertexMain(uint vertexId: SV_VertexID, uint instanceId: SV_InstanceID)
     o.quadPos = corner * kSplatExtentStdDev;
 
     float opacity = 1.0 / (1.0 + exp(-sp.opacity)); // sigmoid
-    opacity *= sqrt(max(detOrig / max(detBlur, 1e-12), 0.0));
+    if (uCamera.antialiased != 0)
+        opacity *= sqrt(max(detOrig / max(detBlur, 1e-12), 0.0)); // Mip-Splatting compensation
     // DC term + view-dependent higher-order SH (dir = splat -> camera).
     const float3 dir = normalize(uCamera.cameraPos - sp.position);
     const float3 rgb = max(0.5 + kShC0 * sp.shDC + evalShRest(splatIndex, dir), 0.0);
