@@ -1,11 +1,12 @@
-// vrf compute_rayquery - headless validation of inline ray tracing (RayQuery):
-// a one-triangle BLAS + TLAS traced by a compute shader (no RT pipeline / SBT),
-// then a readback that asserts the center ray hit and a corner ray missed.
+// vrf compute_rayquery - headless validation of inline ray tracing (RayQuery)
+// over PROCEDURAL geometry: a BLAS of one AABB containing a unit sphere, traced
+// by a compute shader that does the ray-sphere test and commits the hit
+// (CommitProceduralPrimitiveHit). Readback asserts center-hit / corner-miss.
 //
-// This is the inline counterpart to rt_triangle. It gates on hasRayQuery (not
-// hasRayTracing), so it runs on backends without a DXR-style SBT - notably the
-// native Metal backend, which reports hasRayQuery via MTL ray queries. This is
-// the path a Metal 3D Gaussian ray tracer (3DGRT) builds on.
+// No RT pipeline / SBT - gates on hasRayQuery, so it runs on the native Metal
+// backend too. This exercises exactly the mechanism a 3D Gaussian ray tracer
+// (3DGRT) uses: a per-splat AABB proxy + a custom in-box gaussian intersection.
+// Validates VRI's new AABB acceleration-structure geometry on both backends.
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
@@ -52,27 +53,25 @@ int main()
         return 0;
     }
 
-    // ---- one triangle in a build-input buffer -----------------------------
-    const float         vertices[9]  = {0.0f, 0.6f, 0.0f, 0.6f, -0.6f, 0.0f, -0.6f, -0.6f, 0.0f};
-    VriBuffer*          vertexBuffer = nullptr;
-    const VriBufferDesc vertexDesc {.size           = sizeof(vertices),
-                                    .usage          = VriBufferUsage_AccelerationBuildInput,
-                                    .memoryLocation = VriMemoryLocation_HostUpload};
-    if (!vrf::Succeeded(core.CreateBuffer(device.Handle(), &vertexDesc, &vertexBuffer)))
+    // ---- one AABB (procedural) around a unit sphere -----------------------
+    const float         aabb[6]      = {-1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f};
+    VriBuffer*          vertexBuffer = nullptr; // (aabb build input; name kept)
+    const VriBufferDesc aabbDesc {.size           = sizeof(aabb),
+                                  .usage          = VriBufferUsage_AccelerationBuildInput,
+                                  .memoryLocation = VriMemoryLocation_HostUpload};
+    if (!vrf::Succeeded(core.CreateBuffer(device.Handle(), &aabbDesc, &vertexBuffer)))
     {
-        std::fprintf(stderr, "[compute-rayquery] vertex buffer creation failed\n");
+        std::fprintf(stderr, "[compute-rayquery] aabb buffer creation failed\n");
         return 1;
     }
-    std::memcpy(core.MapBuffer(vertexBuffer, 0, sizeof(vertices)), vertices, sizeof(vertices));
+    std::memcpy(core.MapBuffer(vertexBuffer, 0, sizeof(aabb)), aabb, sizeof(aabb));
     core.UnmapBuffer(vertexBuffer);
 
-    auto blas = vrf::Blas::Create(device,
-                                  {VriAsTrianglesDesc {
-                                      .vertexBuffer = vertexBuffer,
-                                      .vertexCount  = 3,
-                                      .vertexStride = sizeof(float) * 3,
-                                      .vertexFormat = VriFormat_RGB32_SFLOAT,
-                                  }});
+    auto blas = vrf::Blas::CreateAabbs(device,
+                                       {VriAsAabbsDesc {
+                                           .buffer = vertexBuffer,
+                                           .count  = 1,
+                                       }});
     if (!blas)
     {
         std::fprintf(stderr, "[compute-rayquery] BLAS: %s\n", blas.error().message.c_str());
@@ -128,7 +127,7 @@ int main()
         return 1;
     }
     vrf::ShaderLibrary shaders = std::move(*shadersResult);
-    auto               cs      = shaders.Resolve("rayquery", vrf::ShaderStage::Compute, {});
+    auto               cs      = shaders.Resolve("rayquery_aabb", vrf::ShaderStage::Compute, {});
     if (!cs)
     {
         std::fprintf(stderr, "[compute-rayquery] compute shader resolve failed\n");
