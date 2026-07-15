@@ -106,7 +106,7 @@ namespace vrf
         const uint64_t bytes    = rowPitch * h;
 
         VriBuffer*          staging = nullptr;
-        const VriBufferDesc bd {.size           = bytes,
+        const VriBufferDesc bd {.size            = bytes,
                                 .structureStride = 0,
                                 .usage           = VriBufferUsage_TransferDst,
                                 .memoryLocation  = VriMemoryLocation_HostReadback};
@@ -130,12 +130,11 @@ namespace vrf
         VriBarrierGroupDesc bg {.textures = &toCopy, .textureNum = 1};
         core.CmdBarrier(cmd, &bg);
 
-        const VriBufferTextureCopyDesc region {.bufferOffset      = 0,
-                                               .bufferRowLength   = 0, // 0 = tightly packed (w texels)
-                                               .bufferImageHeight = 0,
-                                               .texture           = {.baseLayer = 0,
-                                                                     .layerNum  = 1,
-                                                                     .aspect    = VriImageAspect_Color}};
+        const VriBufferTextureCopyDesc region {
+            .bufferOffset      = 0,
+            .bufferRowLength   = 0, // 0 = tightly packed (w texels)
+            .bufferImageHeight = 0,
+            .texture           = {.baseLayer = 0, .layerNum = 1, .aspect = VriImageAspect_Color}};
         core.CmdReadbackTextureToBuffer(cmd, staging, texture.Handle(), &region);
 
         VriTextureBarrierDesc back {
@@ -157,7 +156,7 @@ namespace vrf
         core.QueueSubmit(device.GraphicsQueue(), &submit);
         core.Wait(fence, 1);
 
-        HostImage    img {.width = w, .height = h};
+        HostImage img {.width = w, .height = h};
         img.rgba.resize(uint64_t {w} * h * 4);
         const auto* src = static_cast<const uint8_t*>(core.MapBuffer(staging, 0, bytes));
         if (src)
@@ -172,8 +171,7 @@ namespace vrf
                     uint8_t*       d = drow + uint64_t {x} * 4;
                     switch (decode)
                     {
-                        case Decode::Rgba16f:
-                        {
+                        case Decode::Rgba16f: {
                             uint16_t hp[4];
                             std::memcpy(hp, s, 8);
                             d[0] = ToU8(HalfToFloat(hp[0]));
