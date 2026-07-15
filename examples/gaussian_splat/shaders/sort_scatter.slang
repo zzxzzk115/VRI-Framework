@@ -8,7 +8,10 @@ void computeMain(uint3 tid: SV_DispatchThreadID)
     const uint i = tid.x;
     if (i >= uP.count)
         return;
+    const uint b = uBucket[i];
+    if (b == kCulled)
+        return; // culled splats are not placed; the draw count excludes them
     uint pos;
-    InterlockedAdd(uOffset[uBucket[i]], 1u, pos);
+    InterlockedAdd(uOffset[b], 1u, pos);
     uSorted[pos] = i;
 }
