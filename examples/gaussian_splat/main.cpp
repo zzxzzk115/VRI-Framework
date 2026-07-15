@@ -42,6 +42,7 @@
 #include <vrf/gpu/builders/pipeline_layout_builder.hpp>
 #include <vrf/gpu/frame_stream.hpp>
 #include <vrf/gpu/render_device.hpp>
+#include <vrf/gpu/screenshot.hpp>
 #include <vrf/gpu/shader_library.hpp>
 #include <vrf/gpu/swapchain.hpp>
 #include <vrf/platform/window.hpp>
@@ -272,6 +273,17 @@ int main(int argc, char** argv)
                 {VriAccess_None, VriLayout_Undefined, VriPipelineStage_None}));
     };
     rebuildBackbuffers();
+
+    // Persistent HDR splat targets (one per in-flight frame) - imported into the
+    // graph instead of a transient resource so a headless screenshot can read the
+    // last frame back after the loop. TransferSrc enables the readback copy.
+    std::vector<vrf::fg::Texture> splatColorTex;
+    for (uint32_t i = 0; i < kFramesInFlight; ++i)
+        splatColorTex.push_back(*vrf::fg::Texture::Create(
+            device,
+            {.extent = kExtent,
+             .format = kHdrFormat,
+             .usage = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource | VriTextureUsage_TransferSrc}));
 
     // ---- GPU buffers -------------------------------------------------------
     // Splats: uploaded once (host-visible, read-only in the shader).
@@ -621,9 +633,11 @@ int main(int argc, char** argv)
     bool sortValidated = false; // frame-0 GPU-vs-CPU check
 
     // ---- frame loop --------------------------------------------------------
-    const auto start      = std::chrono::steady_clock::now();
-    uint64_t   frameCount = 0;
-    const bool autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
+    const auto  start      = std::chrono::steady_clock::now();
+    uint64_t    frameCount = 0;
+    const bool  autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
+    const char* shotPath   = std::getenv("VRF_EXAMPLE_SCREENSHOT"); // headless PNG readback
+    uint32_t    lastFrame  = 0;
 
     std::vector<uint32_t> order(splatCount);
     std::vector<float>    viewZ(splatCount);
@@ -723,6 +737,8 @@ int main(int argc, char** argv)
         FrameGraph           graph;
         FrameGraphBlackboard blackboard;
         auto                 backbufferId = vrf::fg::importTexture(graph, "Backbuffer", &backbuffers[acquired.index]);
+        lastFrame                         = frames.FrameIndex();
+        auto splatColorId                 = vrf::fg::importTexture(graph, "SplatColor", &splatColorTex[lastFrame]);
 
         struct SplatData
         {
@@ -731,12 +747,7 @@ int main(int argc, char** argv)
         const auto& splatPass = graph.addCallbackPass<SplatData>(
             "Splat",
             [&](FrameGraph::Builder& builder, SplatData& data) {
-                data.color = builder.create<vrf::fg::FrameGraphTexture>(
-                    "SplatColor",
-                    {.extent = extent,
-                     .format = kHdrFormat,
-                     .usage  = VriTextureUsage_ColorAttachment | VriTextureUsage_ShaderResource});
-                data.color = builder.write(data.color,
+                data.color = builder.write(splatColorId,
                                            vrf::fg::Attachment {.index       = 0,
                                                                 .imageAspect = vrf::fg::ImageAspect::Color,
                                                                 .clearValue  = vrf::fg::ClearValue::OpaqueBlack});
@@ -830,6 +841,17 @@ int main(int argc, char** argv)
     }
 
     device.WaitIdle();
+
+    if (shotPath)
+    {
+        // flipY: the raster path renders with an inverted-Y clip (proj[1][1] *= -1),
+        // so the stored framebuffer rows are bottom-up relative to the display.
+        if (const auto r = vrf::SaveTextureToPng(device, splatColorTex[lastFrame], shotPath, /*flipY=*/true); !r)
+            std::fprintf(stderr, "[gaussian-splat] screenshot: %s\n", r.error().message.c_str());
+        else
+            std::printf("[gaussian-splat] screenshot -> %s\n", shotPath);
+    }
+
     std::printf("[gaussian-splat] frames: %llu, splats: %u\n", static_cast<unsigned long long>(frameCount), splatCount);
 
     for (uint32_t i = 0; i < kFramesInFlight; ++i)

@@ -88,7 +88,7 @@ namespace vrf
         }
     } // namespace
 
-    Expected<HostImage> ReadbackTexture(RenderDevice& device, fg::Texture& texture)
+    Expected<HostImage> ReadbackTexture(RenderDevice& device, fg::Texture& texture, bool flipY)
     {
         const VriCoreInterface& core = device.Core();
 
@@ -164,7 +164,8 @@ namespace vrf
             for (uint32_t y = 0; y < h; ++y)
             {
                 const uint8_t* srow = src + uint64_t {y} * rowPitch;
-                uint8_t*       drow = img.rgba.data() + uint64_t {y} * w * 4;
+                const uint32_t dy   = flipY ? (h - 1 - y) : y;
+                uint8_t*       drow = img.rgba.data() + uint64_t {dy} * w * 4;
                 for (uint32_t x = 0; x < w; ++x)
                 {
                     const uint8_t* s = srow + uint64_t {x} * texelSize;
@@ -207,9 +208,9 @@ namespace vrf
         return img;
     }
 
-    Expected<void> SaveTextureToPng(RenderDevice& device, fg::Texture& texture, const std::string& path)
+    Expected<void> SaveTextureToPng(RenderDevice& device, fg::Texture& texture, const std::string& path, bool flipY)
     {
-        auto img = ReadbackTexture(device, texture);
+        auto img = ReadbackTexture(device, texture, flipY);
         if (!img)
             return std::unexpected(img.error());
         if (stbi_write_png(path.c_str(),
