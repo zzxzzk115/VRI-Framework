@@ -64,8 +64,9 @@ namespace
         glm::vec2 focal;
         glm::vec2 viewport;
         uint32_t  shDegree;
-        uint32_t  shStride; // higher-order floats per point = coeffCount * 3
-        glm::vec2 pad0;
+        uint32_t  shStride;    // higher-order floats per point = coeffCount * 3
+        uint32_t  antialiased; // 1 = Mip-Splatting opacity compensation, 0 = classic 3DGS
+        uint32_t  pad0;
     };
 
     // Push constant for the GPU sort - must match SortParams in sort_common.slangh.
@@ -678,15 +679,16 @@ int main(int argc, char** argv)
         proj[1][1] *= -1.0f; // Vulkan Y-down clip space
 
         CameraBlock camBlock {};
-        camBlock.view       = view;
-        camBlock.proj       = proj;
-        camBlock.cameraPos  = eye;
-        const float focalY  = 0.5f * static_cast<float>(extent.height) / std::tan(0.5f * fovY);
-        camBlock.focal      = glm::vec2 {focalY, focalY};
-        camBlock.viewport   = glm::vec2 {static_cast<float>(extent.width), static_cast<float>(extent.height)};
-        camBlock.splatScale = 1.0f;
-        camBlock.shDegree   = static_cast<uint32_t>(splat.shDegree);
-        camBlock.shStride   = shStride;
+        camBlock.view        = view;
+        camBlock.proj        = proj;
+        camBlock.cameraPos   = eye;
+        const float focalY   = 0.5f * static_cast<float>(extent.height) / std::tan(0.5f * fovY);
+        camBlock.focal       = glm::vec2 {focalY, focalY};
+        camBlock.viewport    = glm::vec2 {static_cast<float>(extent.width), static_cast<float>(extent.height)};
+        camBlock.splatScale  = 1.0f;
+        camBlock.shDegree    = static_cast<uint32_t>(splat.shDegree);
+        camBlock.shStride    = shStride;
+        camBlock.antialiased = splat.antialiased ? 1u : 0u;
         std::memcpy(core.MapBuffer(pf.camera, 0, sizeof(camBlock)), &camBlock, sizeof(camBlock));
         core.UnmapBuffer(pf.camera);
 
