@@ -12,9 +12,13 @@ namespace vrf
 
     Expected<RayTracing> RayTracing::Get(RenderDevice& device)
     {
-        if (device.Desc()->hasRayTracing == VRI_FALSE)
+        // Acceleration structures back BOTH the SBT ray-tracing pipeline
+        // (hasRayTracing) and inline ray query (hasRayQuery) - the latter is all
+        // the native Metal backend exposes (no DXR-style SBT). Allow either so
+        // Blas/Tlas build for inline-RT-only devices too.
+        if (device.Desc()->hasRayTracing == VRI_FALSE && device.Desc()->hasRayQuery == VRI_FALSE)
         {
-            return MakeError(VriResult_Unsupported, "RayTracing::Get", "device has no ray tracing");
+            return MakeError(VriResult_Unsupported, "RayTracing::Get", "device has no ray tracing or ray query");
         }
         RayTracing out;
         if (const auto r = vriGetInterface(device.Handle(), VRI_INTERFACE_RAYTRACING, sizeof(out.m_api), &out.m_api);
