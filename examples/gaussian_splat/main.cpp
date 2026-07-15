@@ -5,9 +5,10 @@
 // the swapchain. This is the core EWA splat raster (Zwicker et al.), the
 // distinctive feature of libvultra dev-next, brought onto VRI-Framework.
 //
-// GPU radix sort + SH view-dependence are later upgrades; this establishes the
-// correct raster with a CPU sort and DC-only color. Loads a .ply/.spz/.splat
-// from argv[1] if given, else generates a synthetic colored sphere of splats.
+// View-dependent SH (bands 0-3) is evaluated per splat. Depth ordering is a
+// per-frame CPU sort for now; a GPU radix sort (vrdx, as NVIDIA's sample uses)
+// is the next upgrade. Loads a .ply/.spz/.splat from argv[1] if given, else
+// generates a synthetic colored sphere of splats.
 //
 // Set VRF_EXAMPLE_AUTO_EXIT to run a few seconds and quit (CI/verification).
 #include <algorithm>
