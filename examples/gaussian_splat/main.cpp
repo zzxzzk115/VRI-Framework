@@ -68,14 +68,19 @@ namespace
         glm::vec2 pad0;
     };
 
-    // Push constant for the GPU sort - must match SortParams in splat_sort.slang.
+    // Push constant for the GPU sort - must match SortParams in sort_common.slangh.
     struct SortParams
     {
         glm::mat4 view;
+        glm::mat4 proj;
         uint32_t  count;
         float     nearZ;
         float     farZ;
-        float     pad;
+        float     dilation;
+        float     focalY;
+        float     minPixels;
+        float     pad0;
+        float     pad1;
     };
 
     // Rest-SH coefficient count per point (excludes DC), by SH degree.
@@ -314,6 +319,8 @@ int main(int argc, char** argv)
         VriDescriptor* offsetView   = nullptr;
         VriBuffer*     bucket       = nullptr;
         VriDescriptor* bucketView   = nullptr;
+        VriBuffer*     drawArgs     = nullptr; // VriDrawDesc for CmdDrawIndirect
+        VriDescriptor* drawArgsView = nullptr;
     };
     auto makeScratch = [&](uint64_t elems, VriBuffer*& buf, VriDescriptor*& view) {
         buf = makeHostBuffer(device, elems * sizeof(uint32_t), VriBufferUsage_StorageBuffer, sizeof(uint32_t), nullptr);
@@ -338,6 +345,15 @@ int main(int argc, char** argv)
         makeScratch(kSortBlocks, pf.blockOff, pf.blockOffView);
         makeScratch(kSortBuckets, pf.offset, pf.offsetView);
         makeScratch(splatCount, pf.bucket, pf.bucketView);
+
+        // Draw args: written by the sort (storage), read by CmdDrawIndirect.
+        pf.drawArgs = makeHostBuffer(device,
+                                     4 * sizeof(uint32_t),
+                                     VriBufferUsage_StorageBuffer | VriBufferUsage_IndirectBuffer,
+                                     sizeof(uint32_t),
+                                     nullptr);
+        const VriBufferViewDesc dv {.buffer = pf.drawArgs, .viewType = VriDescriptorType_StorageBuffer};
+        core.CreateBufferView(device.Handle(), &dv, &pf.drawArgsView);
     }
 
     // A StorageBuffer view of the sorted-index buffer for the scatter stage
@@ -500,6 +516,10 @@ int main(int argc, char** argv)
                                       .descriptorNum  = 1,
                                       .descriptorType = VriDescriptorType_StorageBuffer,
                                       .shaderStages   = VriShaderStage_Compute},
+                                     {.baseRegister   = 7,
+                                      .descriptorNum  = 1,
+                                      .descriptorType = VriDescriptorType_StorageBuffer,
+                                      .shaderStages   = VriShaderStage_Compute},
                                  }}};
     {
         std::vector<VriDescriptorSetDesc> sets;
@@ -547,15 +567,16 @@ int main(int argc, char** argv)
     auto recordSort =
         [&](VriCommandBuffer* cmd, vrf::fg::RenderContext& rc, PerFrame& pf, uint32_t slot, const SortParams& sp) {
             // Compute-to-compute RAW/WAR barrier over every sort scratch buffer.
-            VriBuffer* const sortBufs[6] = {pf.histo, pf.blockSum, pf.blockOff, pf.offset, pf.bucket, pf.indices};
-            const auto       barrier     = [&] {
-                VriBufferBarrierDesc bb[6];
-                for (int k = 0; k < 6; ++k)
+            VriBuffer* const sortBufs[7] = {
+                pf.histo, pf.blockSum, pf.blockOff, pf.offset, pf.bucket, pf.indices, pf.drawArgs};
+            const auto barrier = [&] {
+                VriBufferBarrierDesc bb[7];
+                for (int k = 0; k < 7; ++k)
                     bb[k] = {.buffer = sortBufs[k],
-                                       .before = {VriAccess_ShaderResourceStorageWrite, VriPipelineStage_ComputeShader},
-                                       .after = {VriAccess_ShaderResourceStorageRead | VriAccess_ShaderResourceStorageWrite,
-                                       VriPipelineStage_ComputeShader}};
-                const VriBarrierGroupDesc bg {.buffers = bb, .bufferNum = 6};
+                             .before = {VriAccess_ShaderResourceStorageWrite, VriPipelineStage_ComputeShader},
+                             .after  = {VriAccess_ShaderResourceStorageRead | VriAccess_ShaderResourceStorageWrite,
+                                        VriPipelineStage_ComputeShader}};
+                const VriBarrierGroupDesc bg {.buffers = bb, .bufferNum = 7};
                 core.CmdBarrier(cmd, &bg);
             };
             core.CmdSetPipelineLayout(cmd, sortLayoutInfo->handle);
@@ -567,6 +588,7 @@ int main(int argc, char** argv)
             rc.resourceSet[0][5] = vrf::fg::bindings::RawDescriptor {pf.bucketView, VriDescriptorType_StorageBuffer};
             rc.resourceSet[0][6] =
                 vrf::fg::bindings::RawDescriptor {sortedRWView[slot], VriDescriptorType_StorageBuffer};
+            rc.resourceSet[0][7] = vrf::fg::bindings::RawDescriptor {pf.drawArgsView, VriDescriptorType_StorageBuffer};
             core.CmdSetPipeline(cmd, sortPipelines[0]);
             rc.BindPipeline(vrf::fg::PassPipeline {sortPipelines[0], sortLayoutInfo, true});
             core.CmdSetConstants(cmd, 0, &sp, sizeof(sp));
@@ -672,19 +694,26 @@ int main(int argc, char** argv)
         // recorded into cmd before the graph's splat pass reads pf.indices.
         const float distToCenter = glm::length(eye - sceneCenter);
         SortParams  sp {};
-        sp.view  = view;
-        sp.count = splatCount;
-        sp.nearZ = std::max(0.01f, distToCenter - sceneRadius);
-        sp.farZ  = distToCenter + sceneRadius;
+        sp.view      = view;
+        sp.proj      = proj;
+        sp.count     = splatCount;
+        sp.nearZ     = std::max(0.01f, distToCenter - sceneRadius);
+        sp.farZ      = distToCenter + sceneRadius;
+        sp.dilation  = 0.2f;   // 20% frustum slack so partly-onscreen splats survive
+        sp.focalY    = focalY; // for the projected-size cull
+        sp.minPixels = 0.0f;   // 0 = size cull off; frustum cull still active
         recordSort(cmd, renderContext, pf, frames.FrameIndex(), sp);
 
-        // scatter (compute-write) -> vertex-shader read of the sorted indices.
+        // sort (compute-write) -> vertex-shader read of the indices + indirect read of the draw args.
         {
-            const VriBufferBarrierDesc bb {
-                .buffer = pf.indices,
-                .before = {VriAccess_ShaderResourceStorageWrite, VriPipelineStage_ComputeShader},
-                .after  = {VriAccess_ShaderResourceRead, VriPipelineStage_VertexShader}};
-            const VriBarrierGroupDesc bg {.buffers = &bb, .bufferNum = 1};
+            const VriBufferBarrierDesc bb[2] = {
+                {.buffer = pf.indices,
+                 .before = {VriAccess_ShaderResourceStorageWrite, VriPipelineStage_ComputeShader},
+                 .after  = {VriAccess_ShaderResourceRead, VriPipelineStage_VertexShader}},
+                {.buffer = pf.drawArgs,
+                 .before = {VriAccess_ShaderResourceStorageWrite, VriPipelineStage_ComputeShader},
+                 .after  = {VriAccess_IndirectBufferRead, VriPipelineStage_DrawIndirect}}};
+            const VriBarrierGroupDesc bg {.buffers = bb, .bufferNum = 2};
             core.CmdBarrier(cmd, &bg);
         }
 
@@ -720,8 +749,9 @@ int main(int argc, char** argv)
                 rc.resourceSet[0][3] = vrf::fg::bindings::RawDescriptor {shView, VriDescriptorType_StructuredBuffer};
                 rc.BeginRendering();
                 rc.BindPipeline(splatPipeline);
-                const VriDrawDesc draw {.vertexNum = 4, .instanceNum = splatCount};
-                rc.device.Core().CmdDraw(rc.cmd, &draw);
+                // Instance count = visible splats, written into the draw args by the sort's
+                // frustum/size cull (CmdDrawIndirect reads it on the GPU - no CPU stall).
+                rc.device.Core().CmdDrawIndirect(rc.cmd, pf.drawArgs, 0, 1, 4 * sizeof(uint32_t));
                 rc.EndRendering();
             });
         blackboard.add<SplatData>() = splatPass;
@@ -761,6 +791,10 @@ int main(int argc, char** argv)
         {
             sortValidated = true;
             device.WaitIdle();
+            // Only the visible (non-culled) prefix [0, visibleCount) is valid.
+            const auto*    args = static_cast<const uint32_t*>(core.MapBuffer(pf.drawArgs, 0, 4 * sizeof(uint32_t)));
+            const uint32_t visibleCount = args[1];
+            core.UnmapBuffer(pf.drawArgs);
             const auto* sorted =
                 static_cast<const uint32_t*>(core.MapBuffer(pf.indices, 0, uint64_t {splatCount} * sizeof(uint32_t)));
             // Check bucket-level monotonicity (intra-bucket order is arbitrary by
@@ -774,7 +808,7 @@ int main(int argc, char** argv)
             };
             uint32_t bucketInversions = 0;
             uint32_t prevBucket       = 0;
-            for (uint32_t k = 0; k < splatCount; ++k)
+            for (uint32_t k = 0; k < visibleCount; ++k)
             {
                 const uint32_t b = bucketOf(sorted[k]);
                 if (b < prevBucket)
@@ -782,10 +816,11 @@ int main(int argc, char** argv)
                 prevBucket = b;
             }
             core.UnmapBuffer(pf.indices);
-            std::printf("[gaussian-splat] GPU sort check: %u bucket-order inversions across %u splats "
+            std::printf("[gaussian-splat] GPU sort+cull: %u visible / %u splats, %u bucket-order inversions "
                         "(0 = correct back-to-front)\n",
-                        bucketInversions,
-                        splatCount);
+                        visibleCount,
+                        splatCount,
+                        bucketInversions);
         }
 
         if (autoExit && std::chrono::steady_clock::now() - start > std::chrono::seconds(5))
@@ -812,7 +847,9 @@ int main(int argc, char** argv)
         core.DestroyBuffer(pf.blockSum);
         core.DestroyBuffer(pf.blockOff);
         core.DestroyBuffer(pf.offset);
+        core.DestroyDescriptor(pf.drawArgsView);
         core.DestroyBuffer(pf.bucket);
+        core.DestroyBuffer(pf.drawArgs);
     }
     core.DestroyDescriptor(splatView);
     core.DestroyDescriptor(splatSortView);
