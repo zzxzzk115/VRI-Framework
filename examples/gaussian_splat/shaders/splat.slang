@@ -26,7 +26,7 @@ struct Camera
     uint     shDegree;    // 0..3 (0 = DC only)
     uint     shStride;    // higher-order floats per point = coeffCount(shDegree) * 3
     uint     antialiased; // 1 = Mip-Splatting opacity compensation, 0 = classic 3DGS
-    uint     pad0;
+    uint     projection;  // 0 = EWA affine (Jacobian), 1 = 3DGUT unscented transform
 };
 [[vk::binding(0, 0)]] ConstantBuffer<Camera> uCamera;
 
@@ -117,6 +117,53 @@ float3 covariance2D(float3x3 cov3D, float3 centerView, float2 focal, float4x4 vi
     return float3(cov2[0][0], cov2[0][1], cov2[1][1]);
 }
 
+// 3DGUT: project the 3D gaussian with an unscented transform instead of the affine
+// Jacobian. Push 2n=6 sigma points (the scaled principal axes) through the full
+// perspective projection and refit a 2D covariance from the projected points. For a
+// near-linear projection this recovers the EWA result exactly; under nonlinearity
+// (wide FOV / off-axis / distortion) it stays accurate where the Jacobian drifts.
+float3 covariance2DUnscented(float3 logScale, float4 q, float3 centerView, float2 focal, float4x4 view)
+{
+    const float3 s = exp(logScale);
+    const float  x = q.x, y = q.y, z = q.z, w = q.w;
+    const float3x3 R = float3x3(1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y),
+                                2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x),
+                                2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y));
+    const float3x3 RS = mul(R, float3x3(s.x, 0, 0, 0, s.y, 0, 0, 0, s.z)); // columns = scaled axes
+    const float3x3 W  = float3x3(view[0].xyz, view[1].xyz, view[2].xyz);
+
+    // View-space scaled principal axes (columns of RS rotated into view space).
+    const float3 a0 = mul(W, float3(RS[0][0], RS[1][0], RS[2][0]));
+    const float3 a1 = mul(W, float3(RS[0][1], RS[1][1], RS[2][1]));
+    const float3 a2 = mul(W, float3(RS[0][2], RS[1][2], RS[2][2]));
+
+    const float sq = sqrt(3.0); // sigma-point scale for n=3, kappa=0 (weights 1/6 each)
+
+    // Perspective projection to pixels (view looks down -z; matches the J above).
+    float2 pts[6];
+    [[unroll]] for (uint k = 0; k < 3; ++k)
+    {
+        const float3 ax = (k == 0) ? a0 : ((k == 1) ? a1 : a2);
+        const float3 pp = centerView + sq * ax;
+        const float3 pm = centerView - sq * ax;
+        pts[2 * k + 0] = focal * pp.xy / pp.z;
+        pts[2 * k + 1] = focal * pm.xy / pm.z;
+    }
+
+    float2 mean = float2(0, 0);
+    [[unroll]] for (uint i = 0; i < 6; ++i)
+        mean += pts[i];
+    mean *= (1.0 / 6.0);
+
+    float3 cov = float3(0, 0, 0); // (xx, xy, yy)
+    [[unroll]] for (uint j = 0; j < 6; ++j)
+    {
+        const float2 d = pts[j] - mean;
+        cov += float3(d.x * d.x, d.x * d.y, d.y * d.y);
+    }
+    return cov * (1.0 / 6.0);
+}
+
 [shader("vertex")]
 VSOutput vertexMain(uint vertexId: SV_VertexID, uint instanceId: SV_InstanceID)
 {
@@ -132,8 +179,11 @@ VSOutput vertexMain(uint vertexId: SV_VertexID, uint instanceId: SV_InstanceID)
     if (centerView.z >= -0.01) // behind / at camera
         return o;
 
-    const float3x3 cov3D = covariance3D(sp.scale, sp.rotation);
-    float3 cov2 = covariance2D(cov3D, centerView.xyz, uCamera.focal, uCamera.view);
+    float3 cov2;
+    if (uCamera.projection != 0)
+        cov2 = covariance2DUnscented(sp.scale, sp.rotation, centerView.xyz, uCamera.focal, uCamera.view);
+    else
+        cov2 = covariance2D(covariance3D(sp.scale, sp.rotation), centerView.xyz, uCamera.focal, uCamera.view);
 
     // Low-pass blur: dilate the 2D covariance by 0.3px (both antialiased and classic
     // modes do this to keep sub-pixel splats from vanishing). The opacity compensation
