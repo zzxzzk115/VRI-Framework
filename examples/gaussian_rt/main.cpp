@@ -32,6 +32,7 @@
 #include <vrf/gpu/frame_stream.hpp>
 #include <vrf/gpu/raytracing.hpp>
 #include <vrf/gpu/render_device.hpp>
+#include <vrf/gpu/screenshot.hpp>
 #include <vrf/gpu/shader_library.hpp>
 #include <vrf/gpu/swapchain.hpp>
 #include <vrf/platform/window.hpp>
@@ -328,7 +329,8 @@ int main(int argc, char** argv)
             device,
             {.extent = kExtent,
              .format = VriFormat_RGBA16_SFLOAT,
-             .usage  = VriTextureUsage_ShaderResourceStorage | VriTextureUsage_ShaderResource}));
+             .usage  = VriTextureUsage_ShaderResourceStorage | VriTextureUsage_ShaderResource |
+                      VriTextureUsage_TransferSrc})); // TransferSrc: headless screenshot readback
 
     std::vector<vrf::fg::Texture> backbuffers;
     auto                          rebuildBackbuffers = [&] {
@@ -352,10 +354,12 @@ int main(int argc, char** argv)
     const glm::vec3 center = 0.5f * (lo + hi);
     const float     radius = 0.5f * glm::length(hi - lo) + 1e-3f;
 
-    bool       builtAs    = false;
-    const auto start      = std::chrono::steady_clock::now();
-    uint64_t   frameCount = 0;
-    const bool autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
+    bool        builtAs    = false;
+    const auto  start      = std::chrono::steady_clock::now();
+    uint64_t    frameCount = 0;
+    const bool  autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
+    const char* shotPath   = std::getenv("VRF_EXAMPLE_SCREENSHOT"); // headless PNG readback
+    uint32_t    lastOut    = 0;
 
     while (!window.ShouldClose())
     {
@@ -373,7 +377,8 @@ int main(int argc, char** argv)
         auto&             slot = allocators[frames.FrameIndex()];
         slot.Reset();
         vrf::fg::RenderContext rc {device, cmd, samplers, slot};
-        auto&                  out = outTex[frames.FrameIndex()];
+        lastOut   = frames.FrameIndex();
+        auto& out = outTex[lastOut];
 
         const float     seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
         const float     angle   = seconds * 0.5f;
@@ -449,6 +454,15 @@ int main(int argc, char** argv)
     }
 
     device.WaitIdle();
+
+    if (shotPath)
+    {
+        if (const auto r = vrf::SaveTextureToPng(device, outTex[lastOut], shotPath); !r)
+            std::fprintf(stderr, "[gaussian-rt] screenshot: %s\n", r.error().message.c_str());
+        else
+            std::printf("[gaussian-rt] screenshot -> %s\n", shotPath);
+    }
+
     std::printf("[gaussian-rt] frames: %llu, splats: %u\n", static_cast<unsigned long long>(frameCount), splatCount);
     return 0;
 }
