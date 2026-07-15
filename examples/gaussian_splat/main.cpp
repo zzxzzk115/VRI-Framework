@@ -67,7 +67,7 @@ namespace
         uint32_t  shDegree;
         uint32_t  shStride;    // higher-order floats per point = coeffCount * 3
         uint32_t  antialiased; // 1 = Mip-Splatting opacity compensation, 0 = classic 3DGS
-        uint32_t  pad0;
+        uint32_t  projection;  // 0 = EWA affine (Jacobian), 1 = 3DGUT unscented transform
     };
 
     // Push constant for the GPU sort - must match SortParams in sort_common.slangh.
@@ -638,6 +638,11 @@ int main(int argc, char** argv)
     const bool  autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
     const char* shotPath   = std::getenv("VRF_EXAMPLE_SCREENSHOT"); // headless PNG readback
     uint32_t    lastFrame  = 0;
+    // Covariance projection: EWA affine Jacobian (default) or 3DGUT unscented transform.
+    const char*    projEnv = std::getenv("VRF_SPLAT_PROJECTION");
+    const uint32_t projMode =
+        (projEnv && (std::strcmp(projEnv, "ut") == 0 || std::strcmp(projEnv, "3dgut") == 0)) ? 1u : 0u;
+    std::printf("[gaussian-splat] projection: %s\n", projMode ? "3DGUT (unscented)" : "EWA (affine)");
 
     std::vector<uint32_t> order(splatCount);
     std::vector<float>    viewZ(splatCount);
@@ -703,6 +708,7 @@ int main(int argc, char** argv)
         camBlock.shDegree    = static_cast<uint32_t>(splat.shDegree);
         camBlock.shStride    = shStride;
         camBlock.antialiased = splat.antialiased ? 1u : 0u;
+        camBlock.projection  = projMode;
         std::memcpy(core.MapBuffer(pf.camera, 0, sizeof(camBlock)), &camBlock, sizeof(camBlock));
         core.UnmapBuffer(pf.camera);
 
