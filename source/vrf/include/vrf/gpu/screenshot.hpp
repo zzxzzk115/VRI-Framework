@@ -38,9 +38,13 @@ namespace vrf
     };
 
     // Read `texture` back to host memory as 8-bit RGBA (one-shot readback + wait).
-    // Leaves the texture in its original access/layout state.
-    [[nodiscard]] Expected<HostImage> ReadbackTexture(RenderDevice& device, fg::Texture& texture);
+    // Leaves the texture in its original access/layout state. `flipY` reverses row
+    // order - pass true for a rasterized framebuffer written with an inverted-Y clip
+    // (proj[1][1] *= -1) so the result matches what's displayed; false for a compute
+    // target written top-row-first.
+    [[nodiscard]] Expected<HostImage> ReadbackTexture(RenderDevice& device, fg::Texture& texture, bool flipY = false);
 
     // Convenience: ReadbackTexture then encode an 8-bit PNG to `path`.
-    [[nodiscard]] Expected<void> SaveTextureToPng(RenderDevice& device, fg::Texture& texture, const std::string& path);
+    [[nodiscard]] Expected<void>
+    SaveTextureToPng(RenderDevice& device, fg::Texture& texture, const std::string& path, bool flipY = false);
 } // namespace vrf
