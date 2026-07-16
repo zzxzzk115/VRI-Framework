@@ -8,41 +8,42 @@
 
 namespace vrf
 {
+    // Record `record` on a throwaway command buffer, submit, and wait. Public (declared in
+    // upload.hpp) so callers can build acceleration structures / do one-off GPU work at load time.
+    void ImmediateSubmit(RenderDevice& device, const std::function<void(VriCommandBuffer*)>& record)
+    {
+        const VriCoreInterface& c = device.Core();
+
+        VriCommandAllocator* alloc = nullptr;
+        c.CreateCommandAllocator(device.Handle(), VriQueueType_Graphics, &alloc);
+        VriCommandBuffer* cmd = nullptr;
+        c.CreateCommandBuffer(alloc, &cmd);
+        VriFence* fence = nullptr;
+        c.CreateFence(device.Handle(), 0, &fence);
+
+        c.ResetCommandAllocator(alloc);
+        c.BeginCommandBuffer(cmd);
+        record(cmd);
+        c.EndCommandBuffer(cmd);
+
+        VriFenceSubmitDesc signal {};
+        signal.fence  = fence;
+        signal.value  = 1;
+        signal.stages = VriPipelineStage_AllCommands;
+        VriQueueSubmitDesc submit {};
+        submit.commandBuffers   = &cmd;
+        submit.commandBufferNum = 1;
+        submit.signalFences     = &signal;
+        submit.signalFenceNum   = 1;
+        c.QueueSubmit(device.GraphicsQueue(), &submit);
+        c.Wait(fence, 1);
+
+        c.DestroyFence(fence);
+        c.DestroyCommandAllocator(alloc);
+    }
+
     namespace
     {
-        // Record `record` on a throwaway command buffer, submit, and wait (load-time only).
-        void ImmediateSubmit(RenderDevice& device, const std::function<void(VriCommandBuffer*)>& record)
-        {
-            const VriCoreInterface& c = device.Core();
-
-            VriCommandAllocator* alloc = nullptr;
-            c.CreateCommandAllocator(device.Handle(), VriQueueType_Graphics, &alloc);
-            VriCommandBuffer* cmd = nullptr;
-            c.CreateCommandBuffer(alloc, &cmd);
-            VriFence* fence = nullptr;
-            c.CreateFence(device.Handle(), 0, &fence);
-
-            c.ResetCommandAllocator(alloc);
-            c.BeginCommandBuffer(cmd);
-            record(cmd);
-            c.EndCommandBuffer(cmd);
-
-            VriFenceSubmitDesc signal {};
-            signal.fence  = fence;
-            signal.value  = 1;
-            signal.stages = VriPipelineStage_AllCommands;
-            VriQueueSubmitDesc submit {};
-            submit.commandBuffers   = &cmd;
-            submit.commandBufferNum = 1;
-            submit.signalFences     = &signal;
-            submit.signalFenceNum   = 1;
-            c.QueueSubmit(device.GraphicsQueue(), &submit);
-            c.Wait(fence, 1);
-
-            c.DestroyFence(fence);
-            c.DestroyCommandAllocator(alloc);
-        }
-
         Expected<VriBuffer*> CreateDeviceBuffer(RenderDevice& device, uint64_t size, VriBufferUsageFlags usage)
         {
             VriBufferDesc desc {};
@@ -206,7 +207,7 @@ namespace vrf
         texture = nullptr;
     }
 
-    Expected<GpuMesh> UploadMesh(RenderDevice& device, const Mesh& mesh)
+    Expected<GpuMesh> UploadMesh(RenderDevice& device, const Mesh& mesh, bool rtAccelInput)
     {
         if (mesh.positions.empty())
             return MakeError("UploadMesh: mesh has no positions");
@@ -285,13 +286,14 @@ namespace vrf
         const uint64_t vbSize     = vertices.size();
         const uint64_t ibSize     = mesh.indices.size() * sizeof(uint32_t);
 
-        auto vertexBuffer = CreateDeviceBuffer(device, vbSize, VriBufferUsage_VertexBuffer);
+        const VriBufferUsageFlags rtUsage = rtAccelInput ? VriBufferUsage_AccelerationBuildInput : 0;
+        auto vertexBuffer                 = CreateDeviceBuffer(device, vbSize, VriBufferUsage_VertexBuffer | rtUsage);
         if (!vertexBuffer)
             return std::unexpected(vertexBuffer.error());
         VriBuffer* indexBuffer = nullptr;
         if (hasIndices)
         {
-            auto ib = CreateDeviceBuffer(device, ibSize, VriBufferUsage_IndexBuffer);
+            auto ib = CreateDeviceBuffer(device, ibSize, VriBufferUsage_IndexBuffer | rtUsage);
             if (!ib)
             {
                 c.DestroyBuffer(*vertexBuffer);
