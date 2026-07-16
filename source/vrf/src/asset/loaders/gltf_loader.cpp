@@ -1,5 +1,7 @@
 #include "vrf/asset/loaders/gltf_loader.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -27,6 +29,66 @@ namespace vrf
 {
     namespace
     {
+        // Box-filter a mip-0 RGBA8 image (in `tex.data`) into a full mip chain, rewriting
+        // `tex.data`/`subresources`/`mipLevels` in place. glTF PNG/JPG textures arrive with a
+        // single mip, so minification aliases: the rasterizer and the ray-traced inpaint then
+        // sample different texels of a high-frequency texture at distance and diverge. A shared
+        // mip chain gives both paths a stable, averaged minification (raster via hardware LOD, RT
+        // via SampleGrad) so a filled hole matches its rasterized neighbours. The 2x2 average is
+        // done on raw bytes (sRGB-unaware, like most engines) - consistency matters more than the
+        // small gamma error, and both passes use the identical mips.
+        void GenerateMipChain(Texture& tex)
+        {
+            if (tex.width == 0 || tex.height == 0 || tex.data.empty() || tex.compressed)
+                return;
+            const uint32_t mipCount =
+                1u + static_cast<uint32_t>(std::floor(std::log2(static_cast<float>(std::max(tex.width, tex.height)))));
+            if (mipCount <= 1)
+                return;
+
+            std::vector<uint8_t>            out;
+            std::vector<TextureSubresource> subs;
+            out.reserve(tex.data.size() * 4 / 3 + 16);
+
+            // mip 0 (copied verbatim from the incoming image)
+            uint32_t w = tex.width, h = tex.height;
+            out.insert(out.end(), tex.data.begin(), tex.data.begin() + static_cast<size_t>(w) * h * 4);
+            subs.push_back({0, 0, 0, static_cast<uint64_t>(w) * h * 4, w, h, 0});
+
+            uint64_t prevOff = 0;
+            uint32_t pw = w, ph = h;
+            for (uint32_t mip = 1; mip < mipCount; ++mip)
+            {
+                const uint32_t nw   = std::max(1u, pw / 2);
+                const uint32_t nh   = std::max(1u, ph / 2);
+                const uint64_t nOff = out.size();
+                out.resize(out.size() + static_cast<size_t>(nw) * nh * 4);
+                for (uint32_t y = 0; y < nh; ++y)
+                    for (uint32_t x = 0; x < nw; ++x)
+                    {
+                        const uint32_t x0 = std::min(x * 2u, pw - 1), x1 = std::min(x * 2u + 1u, pw - 1);
+                        const uint32_t y0 = std::min(y * 2u, ph - 1), y1 = std::min(y * 2u + 1u, ph - 1);
+                        for (int c = 0; c < 4; ++c)
+                        {
+                            const uint32_t s = out[prevOff + (static_cast<uint64_t>(y0) * pw + x0) * 4 + c] +
+                                               out[prevOff + (static_cast<uint64_t>(y0) * pw + x1) * 4 + c] +
+                                               out[prevOff + (static_cast<uint64_t>(y1) * pw + x0) * 4 + c] +
+                                               out[prevOff + (static_cast<uint64_t>(y1) * pw + x1) * 4 + c];
+                            out[nOff + (static_cast<uint64_t>(y) * nw + x) * 4 + c] =
+                                static_cast<uint8_t>((s + 2) / 4);
+                        }
+                    }
+                subs.push_back({mip, 0, nOff, static_cast<uint64_t>(nw) * nh * 4, nw, nh, 0});
+                prevOff = nOff;
+                pw      = nw;
+                ph      = nh;
+            }
+
+            tex.data         = std::move(out);
+            tex.subresources = std::move(subs);
+            tex.mipLevels    = mipCount;
+        }
+
         // Read a vertex-attribute accessor into a flat float array; returns the component
         // count per element (2/3/4). Handles float + normalized integer component types and
         // interleaved byte strides. Sparse accessors are not supported (returns 0).
@@ -336,6 +398,7 @@ namespace vrf
                             texture.data[i * 4 + 3] = 255;
                         }
                     }
+                    GenerateMipChain(texture); // shared mip chain -> raster/RT minification match
                 }
                 out.textures.push_back(std::move(texture));
             }
