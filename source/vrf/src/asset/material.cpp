@@ -105,4 +105,12 @@ namespace vrf
             return std::nullopt;
         return ext->GetFloat("emissiveStrength", 1.0f);
     }
+
+    std::optional<float> Material::Ior() const
+    {
+        const MaterialExtension* ext = Extension(ext_name::Ior);
+        if (!ext)
+            return std::nullopt;
+        return ext->GetFloat("ior", 1.5f);
+    }
 } // namespace vrf

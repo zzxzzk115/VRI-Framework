@@ -311,6 +311,9 @@ namespace vrf
         [[nodiscard]] std::optional<IridescenceInfo>  Iridescence() const;
         [[nodiscard]] std::optional<AnisotropyInfo>   Anisotropy() const;
         [[nodiscard]] std::optional<float>            EmissiveStrength() const;
+        // Dielectric index of refraction (KHR_materials_ior). nullopt if the extension is absent;
+        // glTF/OpenPBR default is 1.5 (F0 = 0.04) when present without a value.
+        [[nodiscard]] std::optional<float> Ior() const;
     };
 
     // Fluent builder for hand-authoring a Material (loaders fill Material directly).
