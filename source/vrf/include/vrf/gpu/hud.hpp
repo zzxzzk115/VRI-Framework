@@ -1,16 +1,18 @@
 /*
  * hud.hpp - a tiny native in-game UI / HUD renderer (NOT ImGui).
  *
- * Immediate-mode: clear() a batch each frame, add rect()/text() in target-pixel coordinates, then
- * draw() into any OPEN color pass - the window backbuffer or one layer of a VR stereo eye target
- * (head-locked HUD). Text is solid colored quads from stb_easy_font (no font atlas/texture), so the
- * whole thing is one alpha-blended colored-triangle pipeline. The caller supplies the trivial shader
- * SPIR-V (the app already cooks Slang); vrf owns the batching, buffers, pipeline and draw.
+ * Immediate-mode, one batch at a time: clear(), add rect()/text() in target-pixel coordinates,
+ * upload(), then draw() into any OPEN color pass - the window backbuffer or one layer of a VR
+ * stereo eye target (head-locked HUD). Repeat clear/upload/draw for each distinct batch/target in a
+ * frame (a small ring of vertex buffers keeps in-flight batches independent). Text is solid colored
+ * quads from stb_easy_font (no font atlas/texture), so it's one alpha-blended colored-triangle
+ * pipeline, lazily built per color format. The caller supplies the trivial shader SPIR-V.
  */
 #pragma once
 
 #include <cstddef>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -39,8 +41,7 @@ namespace vrf
             const char* entry {"main"};
         };
 
-        // colorFormat must match the target pass (backbuffer / eye) the HUD draws into.
-        [[nodiscard]] static Expected<Hud> Create(RenderDevice&, VriFormat colorFormat, Shader vertex, Shader fragment);
+        [[nodiscard]] static Expected<Hud> Create(RenderDevice&, Shader vertex, Shader fragment);
 
         Hud() = default;
         ~Hud();
@@ -58,16 +59,24 @@ namespace vrf
         [[nodiscard]] float textWidth(const std::string& str, float scale) const;
         [[nodiscard]] float textHeight(float scale) const;
 
-        // Stage this frame's batch into a host-visible vertex buffer (cycles frames-in-flight
-        // internally). Call once per frame, before recording; then draw() as many times as needed.
-        void upload();
+        // A handle to one uploaded batch (so several batches can coexist in a frame - e.g. the
+        // desktop overlay plus a per-eye HUD - each drawn independently).
+        struct Batch
+        {
+            uint32_t ring {0};
+            uint32_t count {0};
+        };
 
-        // Record the HUD draws into an OPEN color pass of `targetExtent` (the caller opened the
-        // framebuffer: backbuffer, or an eye layer via AttachmentInfo::layer).
-        void draw(fg::RenderContext&, Extent2D targetExtent);
+        // Stage the current batch into a fresh ring vertex buffer; returns its handle.
+        [[nodiscard]] Batch upload();
+
+        // Record `batch` into an OPEN color pass of `targetExtent` and `colorFormat` (pipelines are
+        // cached per format).
+        void draw(fg::RenderContext&, Extent2D targetExtent, VriFormat colorFormat, const Batch& batch);
 
     private:
-        void reset() noexcept;
+        void                reset() noexcept;
+        [[nodiscard]] VriPipeline* pipelineFor(VriFormat colorFormat);
 
         struct Vertex
         {
@@ -75,15 +84,23 @@ namespace vrf
             glm::vec4 col;
         };
 
-        RenderDevice*       m_device {nullptr};
-        VriPipeline*        m_pipeline {nullptr};
-        VriPipelineLayout*  m_layout {nullptr};
+        RenderDevice*         m_device {nullptr};
+        VriPipelineLayout*    m_layout {nullptr};
+        std::vector<uint32_t> m_vsSpirv, m_fsSpirv; // owned copies (caller's may not outlive us)
+        std::string           m_vsEntry {"main"}, m_fsEntry {"main"};
+
+        struct FormatPipeline
+        {
+            VriFormat    format;
+            VriPipeline* pipeline;
+        };
+        std::vector<FormatPipeline> m_pipelines;
+
         std::vector<Vertex> m_vertices;
 
-        static constexpr uint32_t kFramesInFlight = 2;
-        VriBuffer*                m_buffers[kFramesInFlight] {};
-        size_t                    m_capacities[kFramesInFlight] {};
-        uint32_t                  m_frame {0};
-        uint32_t                  m_drawCount {0}; // vertices in the current frame's buffer
+        static constexpr uint32_t kRing = 8; // > batches-per-frame * frames-in-flight
+        VriBuffer*                m_buffers[kRing] {};
+        size_t                    m_capacities[kRing] {};
+        uint32_t                  m_ring {0}; // allocation cursor
     };
 } // namespace vrf

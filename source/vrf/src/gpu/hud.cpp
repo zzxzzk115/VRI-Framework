@@ -1,7 +1,6 @@
 #include "vrf/gpu/hud.hpp"
 
 #include <cstring>
-#include <string>
 #include <utility>
 
 #include <stb_easy_font.h>
@@ -20,20 +19,36 @@ namespace vrf
             glm::vec2 invTargetSize;
             glm::vec2 pad;
         };
-
-        // stb_easy_font packs a fixed ~6x7 cell; scale 1 => ~7px tall. `scale` multiplies that.
-        constexpr float kStbFontHeight = 7.0f;
+        constexpr float kStbFontHeight = 7.0f; // stb_easy_font cell height at scale 1
     } // namespace
 
-    Expected<Hud> Hud::Create(RenderDevice& device, VriFormat colorFormat, Shader vertex, Shader fragment)
+    Expected<Hud> Hud::Create(RenderDevice& device, Shader vertex, Shader fragment)
     {
-        // Layout: just a push constant (no descriptor sets - text is untextured colored triangles).
+        // Just a push constant (no descriptor sets - text is untextured colored triangles).
         PipelineLayoutBuilder layoutBuilder;
         layoutBuilder.SetShaderStages(VriShaderStage_AllGraphics);
         layoutBuilder.AddPushConstant(0, sizeof(HudPush), VriShaderStage_Vertex);
         auto layout = layoutBuilder.Build(device);
         if (!layout)
             return std::unexpected(layout.error());
+
+        Hud hud;
+        hud.m_device = &device;
+        hud.m_layout = *layout;
+        hud.m_vsSpirv.assign(static_cast<const uint32_t*>(vertex.spirv),
+                             static_cast<const uint32_t*>(vertex.spirv) + vertex.size / sizeof(uint32_t));
+        hud.m_fsSpirv.assign(static_cast<const uint32_t*>(fragment.spirv),
+                             static_cast<const uint32_t*>(fragment.spirv) + fragment.size / sizeof(uint32_t));
+        hud.m_vsEntry = vertex.entry;
+        hud.m_fsEntry = fragment.entry;
+        return hud;
+    }
+
+    VriPipeline* Hud::pipelineFor(VriFormat colorFormat)
+    {
+        for (const auto& fp : m_pipelines)
+            if (fp.format == colorFormat)
+                return fp.pipeline;
 
         VriBlendDesc blend {};
         blend.enable   = VRI_TRUE;
@@ -45,24 +60,22 @@ namespace vrf
         blend.alphaOp  = VriBlendOp_Add;
 
         auto pipeline = GraphicsPipelineBuilder {}
-                            .SetPipelineLayout(*layout)
-                            .AddShader(VriShaderStage_Vertex, vertex.spirv, vertex.size, vertex.entry)
-                            .AddShader(VriShaderStage_Fragment, fragment.spirv, fragment.size, fragment.entry)
+                            .SetPipelineLayout(m_layout)
+                            .AddShader(VriShaderStage_Vertex, m_vsSpirv.data(), m_vsSpirv.size() * sizeof(uint32_t),
+                                       m_vsEntry.c_str())
+                            .AddShader(VriShaderStage_Fragment, m_fsSpirv.data(), m_fsSpirv.size() * sizeof(uint32_t),
+                                       m_fsEntry.c_str())
                             .SetTopology(VriPrimitiveTopology_TriangleList)
                             .SetCullMode(VriCullMode_None)
                             .AddVertexStream(sizeof(Vertex), 0)
                             .AddVertexAttribute(VriFormat_RG32_SFLOAT, offsetof(Vertex, pos), 0)   // POSITION
                             .AddVertexAttribute(VriFormat_RGBA32_SFLOAT, offsetof(Vertex, col), 0) // COLOR0
                             .AddColorAttachment(colorFormat, VriColorWrite_RGBA, blend)
-                            .Build(device);
+                            .Build(*m_device);
         if (!pipeline)
-            return std::unexpected(pipeline.error());
-
-        Hud hud;
-        hud.m_device   = &device;
-        hud.m_layout   = *layout;
-        hud.m_pipeline = *pipeline;
-        return hud;
+            return nullptr;
+        m_pipelines.push_back({colorFormat, *pipeline});
+        return *pipeline;
     }
 
     Hud::Hud(Hud&& o) noexcept { *this = std::move(o); }
@@ -72,25 +85,23 @@ namespace vrf
         if (this != &o)
         {
             reset();
-            m_device   = o.m_device;
-            m_pipeline = o.m_pipeline;
-            m_layout   = o.m_layout;
-            m_vertices = std::move(o.m_vertices);
-            m_frame    = o.m_frame;
-            m_drawCount = o.m_drawCount;
-            for (uint32_t i = 0; i < kFramesInFlight; ++i)
+            m_device    = o.m_device;
+            m_layout    = o.m_layout;
+            m_vsSpirv   = std::move(o.m_vsSpirv);
+            m_fsSpirv   = std::move(o.m_fsSpirv);
+            m_vsEntry   = std::move(o.m_vsEntry);
+            m_fsEntry   = std::move(o.m_fsEntry);
+            m_pipelines = std::move(o.m_pipelines);
+            m_vertices  = std::move(o.m_vertices);
+            m_ring      = o.m_ring;
+            for (uint32_t i = 0; i < kRing; ++i)
             {
                 m_buffers[i]    = o.m_buffers[i];
                 m_capacities[i] = o.m_capacities[i];
+                o.m_buffers[i]  = nullptr;
             }
-            o.m_device   = nullptr;
-            o.m_pipeline = nullptr;
-            o.m_layout   = nullptr;
-            for (uint32_t i = 0; i < kFramesInFlight; ++i)
-            {
-                o.m_buffers[i]    = nullptr;
-                o.m_capacities[i] = 0;
-            }
+            o.m_device = nullptr;
+            o.m_layout = nullptr;
         }
         return *this;
     }
@@ -102,11 +113,12 @@ namespace vrf
         if (!m_device)
             return;
         const auto& core = m_device->Core();
-        for (uint32_t i = 0; i < kFramesInFlight; ++i)
+        for (uint32_t i = 0; i < kRing; ++i)
             if (m_buffers[i])
                 core.DestroyBuffer(m_buffers[i]);
-        if (m_pipeline)
-            core.DestroyPipeline(m_pipeline);
+        for (const auto& fp : m_pipelines)
+            if (fp.pipeline)
+                core.DestroyPipeline(fp.pipeline);
         if (m_layout)
             core.DestroyPipelineLayout(m_layout);
         m_device = nullptr;
@@ -127,27 +139,23 @@ namespace vrf
     {
         if (str.empty())
             return;
-        // stb_easy_font emits quads of {float x,y,z; uchar rgba[4]}; we take pos, scale, recolor.
         static thread_local std::vector<char> buffer;
-        buffer.resize(str.size() * 270 + 512); // ~270 bytes/char worst case (4 verts * 16 + slack)
-        const int quads =
-            stb_easy_font_print(0.0f, 0.0f, const_cast<char*>(str.c_str()), nullptr, buffer.data(),
-                                static_cast<int>(buffer.size()));
+        buffer.resize(str.size() * 270 + 512);
+        const int quads = stb_easy_font_print(0.0f, 0.0f, const_cast<char*>(str.c_str()), nullptr, buffer.data(),
+                                              static_cast<int>(buffer.size()));
         struct StbVert
         {
             float         x, y, z;
             unsigned char color[4];
         };
         const auto* verts = reinterpret_cast<const StbVert*>(buffer.data());
+        auto        p     = [&](const StbVert& v) { return glm::vec2 {x + v.x * scale, y + v.y * scale}; };
         for (int q = 0; q < quads; ++q)
         {
             const StbVert& v0 = verts[q * 4 + 0];
             const StbVert& v1 = verts[q * 4 + 1];
             const StbVert& v2 = verts[q * 4 + 2];
             const StbVert& v3 = verts[q * 4 + 3];
-            auto           p  = [&](const StbVert& v) {
-                return glm::vec2 {x + v.x * scale, y + v.y * scale};
-            };
             m_vertices.push_back({p(v0), color});
             m_vertices.push_back({p(v1), color});
             m_vertices.push_back({p(v2), color});
@@ -164,58 +172,59 @@ namespace vrf
 
     float Hud::textHeight(float scale) const { return kStbFontHeight * scale; }
 
-    void Hud::upload()
+    Hud::Batch Hud::upload()
     {
-        if (!m_device)
-            return;
-        m_frame     = (m_frame + 1) % kFramesInFlight;
-        m_drawCount = static_cast<uint32_t>(m_vertices.size());
-        if (m_drawCount == 0)
-            return;
-
-        const auto&    core  = m_device->Core();
-        const uint64_t bytes = m_vertices.size() * sizeof(Vertex);
-        if (m_capacities[m_frame] < bytes)
+        if (!m_device || m_vertices.empty())
+            return {};
+        m_ring                 = (m_ring + 1) % kRing;
+        const uint32_t count   = static_cast<uint32_t>(m_vertices.size());
+        const auto&    core    = m_device->Core();
+        const uint64_t bytes   = m_vertices.size() * sizeof(Vertex);
+        if (m_capacities[m_ring] < bytes)
         {
-            if (m_buffers[m_frame])
-                core.DestroyBuffer(m_buffers[m_frame]);
-            const uint64_t     cap = bytes + bytes / 2 + 4096; // grow with slack
-            const VriBufferDesc desc {.size           = cap,
+            if (m_buffers[m_ring])
+                core.DestroyBuffer(m_buffers[m_ring]);
+            const uint64_t      cap = bytes + bytes / 2 + 4096;
+            const VriBufferDesc desc {.size            = cap,
                                       .structureStride = 0,
-                                      .usage          = VriBufferUsage_VertexBuffer,
-                                      .memoryLocation = VriMemoryLocation_HostUpload};
-            if (core.CreateBuffer(m_device->Handle(), &desc, &m_buffers[m_frame]) != VriResult_Success)
+                                      .usage           = VriBufferUsage_VertexBuffer,
+                                      .memoryLocation  = VriMemoryLocation_HostUpload};
+            if (core.CreateBuffer(m_device->Handle(), &desc, &m_buffers[m_ring]) != VriResult_Success)
             {
-                m_buffers[m_frame]    = nullptr;
-                m_capacities[m_frame] = 0;
-                m_drawCount           = 0;
-                return;
+                m_buffers[m_ring]    = nullptr;
+                m_capacities[m_ring] = 0;
+                return {};
             }
-            m_capacities[m_frame] = cap;
+            m_capacities[m_ring] = cap;
         }
-        if (void* mapped = core.MapBuffer(m_buffers[m_frame], 0, bytes))
+        if (void* mapped = core.MapBuffer(m_buffers[m_ring], 0, bytes))
         {
             std::memcpy(mapped, m_vertices.data(), bytes);
-            core.UnmapBuffer(m_buffers[m_frame]);
+            core.UnmapBuffer(m_buffers[m_ring]);
         }
+        return {m_ring, count};
     }
 
-    void Hud::draw(fg::RenderContext& rc, Extent2D targetExtent)
+    void Hud::draw(fg::RenderContext& rc, Extent2D targetExtent, VriFormat colorFormat, const Batch& batch)
     {
-        if (m_drawCount == 0 || !m_buffers[m_frame])
+        if (batch.count == 0 || batch.ring >= kRing || !m_buffers[batch.ring])
             return;
+        VriPipeline* pipeline = pipelineFor(colorFormat);
+        if (!pipeline)
+            return;
+
         const auto& core = rc.device.Core();
         core.CmdSetPipelineLayout(rc.cmd, m_layout);
-        core.CmdSetPipeline(rc.cmd, m_pipeline);
+        core.CmdSetPipeline(rc.cmd, pipeline);
 
         const HudPush push {glm::vec2 {1.0f / static_cast<float>(targetExtent.width),
                                        1.0f / static_cast<float>(targetExtent.height)},
                             glm::vec2 {0.0f}};
         core.CmdSetConstants(rc.cmd, 0, &push, sizeof(push));
 
-        const VriVertexBufferBinding vb {m_buffers[m_frame], 0};
+        const VriVertexBufferBinding vb {m_buffers[batch.ring], 0};
         core.CmdSetVertexBuffers(rc.cmd, 0, &vb, 1);
-        const VriDrawDesc draw {.vertexNum = m_drawCount, .instanceNum = 1};
+        const VriDrawDesc draw {.vertexNum = batch.count, .instanceNum = 1};
         core.CmdDraw(rc.cmd, &draw);
     }
 } // namespace vrf
