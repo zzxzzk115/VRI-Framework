@@ -55,6 +55,29 @@ namespace vrf
         [[nodiscard]] const VriCoreInterface&      Core() const noexcept { return m_core; }
         [[nodiscard]] const VriSwapChainInterface& Swap() const noexcept { return m_swap; }
         [[nodiscard]] VriQueue*                    GraphicsQueue() const noexcept { return m_graphicsQueue; }
+        // The queue for a workload type. Falls back to the graphics queue when the backend exposes
+        // no dedicated compute/transfer queue (Metal/MoltenVK), so callers can always submit.
+        [[nodiscard]] VriQueue* Queue(VriQueueType type) const noexcept
+        {
+            switch (type)
+            {
+                case VriQueueType_Compute:
+                    return m_computeQueue;
+                case VriQueueType_Transfer:
+                    return m_transferQueue;
+                default:
+                    return m_graphicsQueue;
+            }
+        }
+        // Whether the backend gave a physically distinct queue (async compute / DMA transfer possible).
+        [[nodiscard]] bool HasDedicatedComputeQueue() const noexcept
+        {
+            return m_computeQueue != m_graphicsQueue;
+        }
+        [[nodiscard]] bool HasDedicatedTransferQueue() const noexcept
+        {
+            return m_transferQueue != m_graphicsQueue;
+        }
         [[nodiscard]] const VriDeviceDesc*         Desc() const noexcept { return m_desc; }
         [[nodiscard]] VriGraphicsAPI               Api() const noexcept { return m_api; }
         [[nodiscard]] const char*                  ApiName() const noexcept;
@@ -77,6 +100,8 @@ namespace vrf
         VriCoreInterface      m_core          = {};
         VriSwapChainInterface m_swap          = {};
         VriQueue*             m_graphicsQueue = nullptr;
+        VriQueue*             m_computeQueue  = nullptr; // == graphics when no dedicated queue
+        VriQueue*             m_transferQueue = nullptr; // == graphics when no dedicated queue
         const VriDeviceDesc*  m_desc          = nullptr;
         VriGraphicsAPI        m_api           = VriGraphicsAPI_None;
     };
