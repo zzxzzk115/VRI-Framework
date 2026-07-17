@@ -51,7 +51,9 @@ namespace vrf
 
     RenderDevice::RenderDevice(RenderDevice&& other) noexcept :
         m_device(std::exchange(other.m_device, nullptr)), m_core(other.m_core), m_swap(other.m_swap),
-        m_graphicsQueue(std::exchange(other.m_graphicsQueue, nullptr)), m_desc(std::exchange(other.m_desc, nullptr)),
+        m_graphicsQueue(std::exchange(other.m_graphicsQueue, nullptr)),
+        m_computeQueue(std::exchange(other.m_computeQueue, nullptr)),
+        m_transferQueue(std::exchange(other.m_transferQueue, nullptr)), m_desc(std::exchange(other.m_desc, nullptr)),
         m_api(std::exchange(other.m_api, VriGraphicsAPI_None))
     {}
 
@@ -64,6 +66,8 @@ namespace vrf
             m_core          = other.m_core;
             m_swap          = other.m_swap;
             m_graphicsQueue = std::exchange(other.m_graphicsQueue, nullptr);
+            m_computeQueue  = std::exchange(other.m_computeQueue, nullptr);
+            m_transferQueue = std::exchange(other.m_transferQueue, nullptr);
             m_desc          = std::exchange(other.m_desc, nullptr);
             m_api           = std::exchange(other.m_api, VriGraphicsAPI_None);
         }
@@ -156,6 +160,21 @@ namespace vrf
             return MakeError(r, "RenderDevice::Create", "GetQueue(Graphics) failed");
         }
 
-        return RenderDevice(device, core, swap, graphicsQueue, deviceDesc, deviceDesc->graphicsAPI);
+        RenderDevice out(device, core, swap, graphicsQueue, deviceDesc, deviceDesc->graphicsAPI);
+
+        // Optional dedicated queues for async compute / DMA transfer. Backends without a distinct
+        // queue (Metal/MoltenVK) fail GetQueue here; fall back to graphics so callers always submit.
+        VriQueue* q         = nullptr;
+        out.m_computeQueue  = (core.GetQueue(device, VriQueueType_Compute, 0, &q) == VriResult_Success && q)
+                                  ? q
+                                  : graphicsQueue;
+        q                   = nullptr;
+        out.m_transferQueue = (core.GetQueue(device, VriQueueType_Transfer, 0, &q) == VriResult_Success && q)
+                                  ? q
+                                  : graphicsQueue;
+        LogInfo("vrf: queues - graphics + {} compute + {} transfer",
+                out.HasDedicatedComputeQueue() ? "dedicated" : "shared",
+                out.HasDedicatedTransferQueue() ? "dedicated" : "shared");
+        return out;
     }
 } // namespace vrf
