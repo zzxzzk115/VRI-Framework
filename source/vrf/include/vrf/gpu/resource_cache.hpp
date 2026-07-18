@@ -45,9 +45,9 @@ namespace vrf
         ResourceCache() = default;
         explicit ResourceCache(RenderDevice& device) : m_device {&device} {}
 
-        ResourceCache(const ResourceCache&)            = delete;
-        ResourceCache& operator=(const ResourceCache&) = delete;
-        ResourceCache(ResourceCache&&) noexcept        = default;
+        ResourceCache(const ResourceCache&)                = delete;
+        ResourceCache& operator=(const ResourceCache&)     = delete;
+        ResourceCache(ResourceCache&&) noexcept            = default;
         ResourceCache& operator=(ResourceCache&&) noexcept = default;
 
         // Return the cached handle for `key`, or create it via `factory` (which returns

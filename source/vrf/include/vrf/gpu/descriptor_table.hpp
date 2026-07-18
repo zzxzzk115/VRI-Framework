@@ -32,11 +32,11 @@ namespace vrf
         {
             VriDescriptorType   type {VriDescriptorType_Texture};
             uint32_t            capacity {1024};
-            uint32_t            registerSpace {0};                 // the set index in the shader
-            uint32_t            baseRegister {0};                  // binding within the set
+            uint32_t            registerSpace {0}; // the set index in the shader
+            uint32_t            baseRegister {0};  // binding within the set
             VriShaderStageFlags stages {VriShaderStage_AllGraphics | VriShaderStage_Compute};
-            VriTextureViewType  viewType {VriTextureViewType_2D};  // Texture ranges only (WebGPU bakes it)
-            VriDescriptor*      fallbackDescriptor {nullptr};      // fills unwritten slots on Commit
+            VriTextureViewType  viewType {VriTextureViewType_2D}; // Texture ranges only (WebGPU bakes it)
+            VriDescriptor*      fallbackDescriptor {nullptr};     // fills unwritten slots on Commit
         };
 
         DescriptorTable() = default;
@@ -44,10 +44,10 @@ namespace vrf
         [[nodiscard]] static Expected<DescriptorTable> Create(RenderDevice&, const Desc&);
 
         // Stage a descriptor at an explicit index / append it. Effective after Commit().
-        void                    Write(uint32_t index, VriDescriptor* view);
-        [[nodiscard]] uint32_t  Add(VriDescriptor* view); // returns index, or Capacity() on overflow
-        void                    Clear();                  // reset staged entries (keeps the GPU set)
-        void                    Commit();                 // flush staged writes to the GPU set
+        void                   Write(uint32_t index, VriDescriptor* view);
+        [[nodiscard]] uint32_t Add(VriDescriptor* view); // returns index, or Capacity() on overflow
+        void                   Clear();                  // reset staged entries (keeps the GPU set)
+        void                   Commit();                 // flush staged writes to the GPU set
 
         [[nodiscard]] VriDescriptorSet* DescriptorSet() const noexcept { return m_set; }
         [[nodiscard]] uint32_t          RegisterSpace() const noexcept { return m_desc.registerSpace; }
@@ -62,10 +62,10 @@ namespace vrf
         RenderDevice*               m_device {nullptr};
         Desc                        m_desc {};
         bool                        m_bindless {false};
-        UniquePipelineLayout        m_layout;               // minimal layout to allocate the set from
-        UniqueDescriptorPool        m_pool;                 // owns m_set
-        VriDescriptorSet*           m_set {nullptr};        // non-owning (freed with the pool)
-        std::vector<VriDescriptor*> m_entries;              // staged, size == capacity
+        UniquePipelineLayout        m_layout;        // minimal layout to allocate the set from
+        UniqueDescriptorPool        m_pool;          // owns m_set
+        VriDescriptorSet*           m_set {nullptr}; // non-owning (freed with the pool)
+        std::vector<VriDescriptor*> m_entries;       // staged, size == capacity
         uint32_t                    m_count {0};
         bool                        m_dirty {false};
     };

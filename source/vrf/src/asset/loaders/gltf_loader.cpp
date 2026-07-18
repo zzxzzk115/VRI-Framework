@@ -74,8 +74,7 @@ namespace vrf
                                                out[prevOff + (static_cast<uint64_t>(y0) * pw + x1) * 4 + c] +
                                                out[prevOff + (static_cast<uint64_t>(y1) * pw + x0) * 4 + c] +
                                                out[prevOff + (static_cast<uint64_t>(y1) * pw + x1) * 4 + c];
-                            out[nOff + (static_cast<uint64_t>(y) * nw + x) * 4 + c] =
-                                static_cast<uint8_t>((s + 2) / 4);
+                            out[nOff + (static_cast<uint64_t>(y) * nw + x) * 4 + c] = static_cast<uint8_t>((s + 2) / 4);
                         }
                     }
                 subs.push_back({mip, 0, nOff, static_cast<uint64_t>(nw) * nh * 4, nw, nh, 0});

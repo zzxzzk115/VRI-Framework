@@ -50,8 +50,8 @@ namespace vrf
 
         // Succeeds even when the device lacks timestamp queries - the result is a disabled
         // profiler whose calls are all no-ops.
-        [[nodiscard]] static Expected<GpuProfiler> Create(RenderDevice&, uint32_t framesInFlight,
-                                                          uint32_t maxZonesPerFrame = 64);
+        [[nodiscard]] static Expected<GpuProfiler>
+        Create(RenderDevice&, uint32_t framesInFlight, uint32_t maxZonesPerFrame = 64);
 
         [[nodiscard]] bool Enabled() const noexcept { return m_device != nullptr; }
 
@@ -80,8 +80,8 @@ namespace vrf
         {
             VriQueryPool*       pool {nullptr};
             VriBuffer*          readback {nullptr};
-            std::vector<Record> records;      // zones recorded into this slot this cycle (CPU side)
-            uint32_t            next {0};      // next free query index
+            std::vector<Record> records;         // zones recorded into this slot this cycle (CPU side)
+            uint32_t            next {0};        // next free query index
             bool                pending {false}; // has unresolved results copied by a prior submit
         };
 
@@ -113,5 +113,5 @@ namespace vrf
 
 #define VRF_GPU_ZONE_CONCAT2(a, b) a##b
 #define VRF_GPU_ZONE_CONCAT(a, b) VRF_GPU_ZONE_CONCAT2(a, b)
-#define VRF_GPU_ZONE(profiler, cmd, name)                                                                              \
+#define VRF_GPU_ZONE(profiler, cmd, name) \
     ::vrf::GpuZoneScope VRF_GPU_ZONE_CONCAT(_vrfGpuZone_, __LINE__) { (profiler), (cmd), (name) }

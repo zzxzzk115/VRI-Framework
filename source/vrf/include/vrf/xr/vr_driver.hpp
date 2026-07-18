@@ -91,12 +91,12 @@ namespace vrf::xr
         // its own (headset menu / RequestExitVr), falling back to the sim rig.
         void Poll();
 
-        [[nodiscard]] StereoRig&    ActiveRig();       // XrSession while in VR, else the sim rig
-        [[nodiscard]] SimStereoRig& Sim();             // the desktop rig (pose driving, extent)
+        [[nodiscard]] StereoRig&    ActiveRig();         // XrSession while in VR, else the sim rig
+        [[nodiscard]] SimStereoRig& Sim();               // the desktop rig (pose driving, extent)
         [[nodiscard]] bool          VrAvailable() const; // an OpenXR runtime + HMD was probed
         [[nodiscard]] bool          VrActive() const;    // an XrSession is created and running
 
-        [[nodiscard]] const std::string& SystemName() const;   // "" when unavailable
+        [[nodiscard]] const std::string& SystemName() const;           // "" when unavailable
         [[nodiscard]] Extent2D           RecommendedEyeExtent() const; // {0,0} when unavailable
 
     private:
