@@ -141,7 +141,9 @@ namespace vrf::fg
                 .constantBufferMaxNum        = 512,
                 .structuredBufferMaxNum      = 512,
                 .storageBufferMaxNum         = 1024,
-                .accelerationStructureMaxNum = m_device->Desc()->hasRayTracing ? 64u : 0u,
+                // Ray query alone (no RT pipeline) still binds AS descriptors.
+                .accelerationStructureMaxNum =
+                    (m_device->Desc()->hasRayTracing || m_device->Desc()->hasRayQuery) ? 64u : 0u,
             };
             VriDescriptorPool* pool = nullptr;
             if (const auto r = m_device->Core().CreateDescriptorPool(m_device->Handle(), &poolDesc, &pool);
