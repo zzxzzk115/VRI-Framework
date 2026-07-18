@@ -74,8 +74,10 @@ API surface — and every GPU object is move-only RAII.
 - Loader-agnostic SoA `Mesh`, a multi-shading-model `Material` (`std::variant` over Unlit /
   PBR-MetallicRoughness / PBR-SpecularGlossiness / Phong), `Texture`, `Light`, `GaussianSplat`.
 - Raw loaders (file → data, third-party headers confined to `.cpp`): `LoadObj`, `LoadGltf`,
-  `LoadImage` (png/jpg/hdr), `LoadKtxDds` (DDS + KTX1), opt-in `LoadKtx2` (libktx), and 3DGS
-  `.ply` / `.splat`.
+  `LoadImage` (png/jpg/hdr), `LoadKtxDds` (DDS + KTX1), opt-in `LoadKtx2` (libktx).
+- **3D Gaussian Splatting** via the vendored **GaussForge** (+ Niantic spz) stack — `LoadGaussianSplat`
+  dispatches by extension across `.ply` / `.compressed.ply` / `.spz` / `.splat` / `.ksplat`
+  (the `.sog` WebP-container format is trimmed out, matching the reference build).
 
 ### App
 - `Application` — a batteries-included window + present loop (used by the examples).
