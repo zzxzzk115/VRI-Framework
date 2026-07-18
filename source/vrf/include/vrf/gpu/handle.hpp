@@ -50,6 +50,11 @@ namespace vrf
     {
         static void Destroy(RenderDevice& d, VriPipelineLayout* h) noexcept { d.Core().DestroyPipelineLayout(h); }
     };
+    template<>
+    struct VriResourceTraits<VriDescriptorPool>
+    {
+        static void Destroy(RenderDevice& d, VriDescriptorPool* h) noexcept { d.Core().DestroyDescriptorPool(h); }
+    };
 
     template<class T>
     class Unique
@@ -104,4 +109,5 @@ namespace vrf
     using UniqueDescriptor     = Unique<VriDescriptor>; // views + samplers
     using UniquePipeline       = Unique<VriPipeline>;
     using UniquePipelineLayout = Unique<VriPipelineLayout>;
+    using UniqueDescriptorPool = Unique<VriDescriptorPool>;
 } // namespace vrf
