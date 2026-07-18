@@ -122,8 +122,12 @@ namespace vrf
                     {
                         continue; // unbalanced zone (missing EndZone)
                     }
-                    const uint64_t delta = ticks[rec.end] - ticks[rec.begin];
-                    m_results.push_back({rec.name, static_cast<double>(delta) * m_periodNs / 1.0e6, rec.depth});
+                    // Guard against a backend that leaves a timestamp unwritten/zero (some MoltenVK
+                    // pipeline stages): end < begin would underflow the unsigned subtraction.
+                    const uint64_t begin = ticks[rec.begin];
+                    const uint64_t end   = ticks[rec.end];
+                    const double   ms    = end > begin ? static_cast<double>(end - begin) * m_periodNs / 1.0e6 : 0.0;
+                    m_results.push_back({rec.name, ms, rec.depth});
                 }
                 m_device->Core().UnmapBuffer(slot.readback);
             }
