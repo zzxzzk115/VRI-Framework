@@ -30,8 +30,9 @@ jobs:
 
   # Build the vrf library (all loaders + shader-variant runtime + both window backends) and run
   # the doctest suite. GPU-upload cases self-skip without a device; on Linux we install Mesa's
-  # lavapipe so Vulkan actually renders headless under Xvfb. examples are off in CI (the model
-  # picker would pull GTK on Linux) - the library + suite are the gate.
+  # lavapipe so Vulkan actually renders headless under Xvfb. examples compile on Windows and
+  # macOS (they only need to build, not run); they stay off on Linux, where the model picker
+  # (NFD) would pull GTK.
   desktop:
     name: desktop (${{ matrix.os }})
     strategy:
@@ -79,10 +80,10 @@ jobs:
           xmake f -y -m release
           -p ${{ runner.os == 'Windows' && 'windows' || 'linux' }}
           ${{ runner.os == 'Windows' && '-a x64 --vs_toolset=14.44' || '' }}
-          --vrf_build_examples=n --vrf_build_tests=y --policies=build.ccache:y
+          --vrf_build_examples=${{ runner.os == 'Windows' && 'y' || 'n' }} --vrf_build_tests=y --policies=build.ccache:y
 
       - name: Build
-        run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y vrf-tests
+        run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y
 
       - name: Test (Linux, headless via Xvfb + lavapipe)
         if: runner.os == 'Linux'
@@ -124,10 +125,10 @@ jobs:
           build-cache: true
 
       - name: Configure
-        run: xmake f -y -m release -p macosx --vrf_build_examples=n --vrf_build_tests=y --policies=build.ccache:y
+        run: xmake f -y -m release -p macosx --vrf_build_examples=y --vrf_build_tests=y --policies=build.ccache:y
 
       - name: Build
-        run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y vrf-tests
+        run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y
 
       - name: Test (backends self-skip without a MoltenVK ICD)
         run: xmake run vrf-tests
