@@ -164,6 +164,14 @@ namespace vrf
             m_api.CmdDrawImgui(cmd, m_gui, &m_data);
         }
     }
+
+    void ImGuiBackend::FreeTexture(VriDescriptor* textureView)
+    {
+        if (m_gui != nullptr && textureView != nullptr)
+        {
+            m_api.FreeImguiTexture(m_gui, textureView);
+        }
+    }
 } // namespace vrf
 
 #endif // VRF_WITH_IMGUI
