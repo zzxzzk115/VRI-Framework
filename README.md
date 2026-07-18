@@ -1,84 +1,160 @@
 # VRI-Framework
 
-A minimal, embeddable **rendering framework** built on top of
-[VRI](https://github.com/zzxzzk115/VRI) (a cross-API Render Hardware Interface).
-It is **not** a game engine — it is a thin, reusable toolset that a renderer or
-engine can stand on:
+[![CI](https://github.com/zzxzzk115/VRI-Framework/actions/workflows/ci.yml/badge.svg)](https://github.com/zzxzzk115/VRI-Framework/actions/workflows/ci.yml)
+[![C++23](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-1. **Window layer** — an abstract `vrf::Window` with **SDL3** and **GLFW**
-   backends, producing a `VriWindowHandle` for the VRI swapchain.
-2. **Loader-agnostic data structures** — SoA `Mesh`, a multi-shading-model
-   `Material` (`std::variant` over Unlit / PBR-MetallicRoughness /
-   PBR-SpecularGlossiness / Phong + lossless properties), `Texture`, `Light`, and
-   `GaussianSplat`, all decoupled from any file format.
-3. **Minimal raw loaders** (file → data struct; no asset-import pipeline) with all
-   third-party headers confined to `.cpp` files:
-   - meshes — `LoadObj` (tinyobjloader → Phong), `LoadGltf` (tinygltf → MR / spec-gloss / unlit)
-   - textures — `LoadImage` (stb: png/jpg/hdr), `LoadKtxDds` (vendored dds-ktx: DDS + KTX1),
-     `LoadTexture` dispatches by extension. KTX2 (`LoadKtx2`, libktx) is opt-in via
-     the `vrf_loader_ktx2` option (heavy dep; off by default).
-   - gaussian splats — `LoadGaussianSplatPly` (binary 3DGS PLY), `LoadGaussianSplatSplat`.
-4. **CPU → GPU bridge** — `UploadMesh` / `UploadTexture` stage CPU assets into GPU
-   buffers/textures.
-5. **C++23 + builder pattern** — fluent `Builder`s wrapping VRI's aggregate
-   descriptor structs (`GraphicsPipelineBuilder`, `PipelineLayoutBuilder`,
-   `BufferBuilder`, `TextureBuilder`), with backend-agnostic `ShaderVariants`
-   (SPIR-V / WGSL / D3D12) so pipelines are not locked to one API.
+**High-level rendering capabilities over [VRI](https://github.com/zzxzzk115/VRI), a
+cross-API Render Hardware Interface.**
 
-**Shading is developer-owned.** The framework does not ship a built-in shading
-model or uber-shader — a `Material` is pure data; you bring your own pipelines and
-shaders and interpret materials however your renderer wants.
+VRI-Framework (`vrf`) is the reusable layer between a raw RHI and a renderer. It turns
+VRI's C ABI into a modern C++23 toolkit — RAII resources, a framegraph, GPU profiling,
+multi-queue submission, a bindless descriptor table, a ray-tracing stack, and an OpenXR
+lifecycle — that an application or engine composes into **its own** renderer.
 
-**Two ways to use it:**
-- `vrf::Application` — a batteries-included window + present loop (the examples).
-- `vrf::RenderModule` — the embeddable render layer (device + swapchain + frame +
-  depth) driven by a host engine's own window and loop; takes a native
-  `VriWindowHandle`, owns neither the window nor the loop. Embed this into an
-  engine as a render module / layer / server.
+> **It is not a renderer and not a game engine.** `vrf` ships no frame pipeline, scene
+> graph, material runtime, or shading model. It provides the building blocks; *you* own
+> the passes, the scene, and the shaders. Think of it as *Vulkan + VMA + a framegraph
+> library*, unified behind one clean C++ API and portable across VRI's backends.
+
+Errors surface as `vrf::Expected<T>` (`std::expected<T, Error>`) — no exceptions in the
+API surface — and every GPU object is move-only RAII.
+
+---
+
+## Capabilities
+
+### Core
+- `Expected<T>` / `Error` result type and `MakeError` helpers — one consistent error model.
+- Settable log sink (route into spdlog, a file, …), glm math aliases, `Extent2D`.
+- CPU profiling zones (`VRF_ZONE`) that compile to nothing without Tracy.
+
+### Platform
+- Abstract `Window` with **SDL3** and **GLFW** backends, yielding a `VriWindowHandle`.
+
+### GPU — RHI capabilities
+- **Device & presentation** — `RenderDevice` (graphics + **compute/transfer queues**),
+  `Swapchain`, single-shot `Frame` and N-frames-in-flight `FrameStream` (timeline-synced).
+- **RAII handles** — `Unique<T>` owns raw `Vri*` resources (`UniqueBuffer`/`Texture`/
+  `Descriptor`/`Pipeline`/…); implicit `T*` conversion for VRI calls, freed on scope exit.
+- **Fluent builders** — `GraphicsPipelineBuilder`, `ComputePipelineBuilder`,
+  `PipelineLayoutBuilder`, `BufferBuilder`, `TextureBuilder`, with backend-agnostic
+  `ShaderVariants` (SPIR-V / WGSL / D3D12) so pipelines aren't locked to one API.
+- **Shaders** — `ShaderLibrary` resolves offline-cooked `.vshlib` variants; attribute-driven
+  `GpuVertexLayout` selects the matching `VTX_HAS_*` permutation from a mesh's layout.
+- **Descriptor table** — `DescriptorTable`: an indexed set that uses true hardware **bindless**
+  (runtime-sized, partially-bound array) when the device supports it, and a fixed-capacity
+  array otherwise — same API and shader either way.
+- **Caches** — a generic desc-keyed `ResourceCache` of RAII handles (keyed by value, not by a
+  hash, so no collision aliasing) and `SamplerCache` on top of it.
+- **GPU profiling** — `GpuProfiler`: nestable `VRF_GPU_ZONE(cmd, name)` timestamp zones with
+  per-frame readback; no-op on backends without timestamp queries.
+- **Ray tracing** — `Blas`/`Tlas` (split create/build for per-frame TLAS rebuilds),
+  `RayTracingPipeline` + builder (owns the SBT), over VRI's ray-tracing extension.
+- **Uploads & readback** — `UploadMesh`/`UploadTexture`, `ImmediateSubmit`, `ReadbackTexture`
+  / `SaveTextureToPng`.
+- **UI** — a native `Hud` (stb_easy_font, no ImGui dependency) for in-game / VR overlays, plus
+  an optional `ImGuiBackend` for host-driven frame loops.
+
+### Framegraph (`fg`)
+- Resource types (`fg::Texture`/`fg::Buffer`) that track their own `VriAccessLayoutStage` and
+  emit explicit barriers, driven by packed per-pass access declarations.
+- `RenderContext` — dynamic rendering, descriptor-set allocation/binding, multiview/stereo.
+- `TransientResources` — desc-keyed pooling with idle eviction; `importTexture` brings external
+  (swapchain / XR / history) targets into a frame's graph.
+
+### XR / VR
+- `StereoRig` interface with two implementations: `SimStereoRig` (desktop emulation) and
+  `XrSession` (a live OpenXR session as a 2-layer stereo target).
+- `VrDriver` — a single façade over the whole OpenXR lifecycle (runtime probe, device-creation
+  hooks, session enter/exit, sim fallback), so app code never touches OpenXR types.
+- OpenXR is opt-in (`vrf_with_openxr`); without it, stereo modes run on the simulator rig.
+
+### Assets & loaders
+- Loader-agnostic SoA `Mesh`, a multi-shading-model `Material` (`std::variant` over Unlit /
+  PBR-MetallicRoughness / PBR-SpecularGlossiness / Phong), `Texture`, `Light`, `GaussianSplat`.
+- Raw loaders (file → data, third-party headers confined to `.cpp`): `LoadObj`, `LoadGltf`,
+  `LoadImage` (png/jpg/hdr), `LoadKtxDds` (DDS + KTX1), opt-in `LoadKtx2` (libktx), and 3DGS
+  `.ply` / `.splat`.
+
+### App
+- `Application` — a batteries-included window + present loop (used by the examples).
+- `RenderModule` — the embeddable render layer (device + swapchain + frame + depth) driven by a
+  host engine's own window and loop; owns neither the window nor the loop.
+
+---
+
+## Quick start
+
+```cpp
+#include <vrf/vrf.hpp>
+
+auto device = vrf::RenderDevice::Create({.api = vrf::GraphicsApi::Vulkan});
+if (!device) return fail(device.error().message);
+
+vrf::UniqueBuffer vbo {*device, *vrf::BufferBuilder{}
+    .SetSize(size).SetUsage(VriBufferUsage_VertexBuffer)
+    .SetMemoryLocation(VriMemoryLocation_HostUpload).Build(*device)};
+// ...freed automatically; no manual Destroy.
+```
+
+See `examples/` for complete programs (triangle, deferred framegraph, ray tracing, compute,
+OpenXR, gaussian splatting).
 
 ## Building
 
-Requires [xmake](https://xmake.io). Dependencies (including the `vri` package)
-resolve from the author's xmake-repo, already wired in `xmake.lua`.
+Requires [xmake](https://xmake.io). Dependencies (including the `vri` package) resolve from the
+author's xmake-repo, already wired in `xmake.lua`.
 
 ```sh
-xmake f -c            # configure (Vulkan backend by default)
-xmake build           # build the vrf static library + examples + tests
+xmake f -c                       # configure (Vulkan backend by default)
+xmake build                      # vrf static library + examples + tests
 xmake run vrf_example_triangle
 ```
 
 ### Options
 
-| Option                 | Default | Description                                  |
-|------------------------|---------|----------------------------------------------|
-| `vrf_window_sdl3`      | `true`  | Build the SDL3 window backend                |
-| `vrf_window_glfw`      | `true`  | Build the GLFW window backend                |
-| `vrf_backend_vulkan`   | `true`  | Vulkan backend (via the `vri` package)       |
-| `vrf_backend_gl/wgpu/d3d12/metal` | `false` | Opt-in additional VRI backends    |
-| `vrf_loader_ktx2`      | `false` | KTX2 texture loader via libktx (heavy dep)   |
-| `vrf_build_examples`   | `true`  | Build the examples                           |
-| `vrf_build_tests`      | `true`  | Build the tests                              |
+| Option | Default | Description |
+|---|---|---|
+| `vrf_window_sdl3` / `vrf_window_glfw` | `true` | Window backends |
+| `vrf_backend_vulkan` | `true` | Reference VRI backend |
+| `vrf_backend_gl` / `_wgpu` / `_d3d12` / `_metal` | `false` | Opt-in VRI backends |
+| `vrf_with_openxr` | `false` | OpenXR (VR/stereo) support — Vulkan only |
+| `vrf_with_imgui` | `true` | Dear ImGui backend |
+| `vrf_with_tracy` | `false` | Tracy CPU profiling zones |
+| `vrf_loader_ktx2` | `false` | KTX2 texture loader (libktx; heavy) |
+| `vrf_loader_draco` | `false` | Draco-compressed glTF |
+| `vrf_cook_shaders` | `false` | Re-cook `.vshlib` shader variants via `vshaderc` |
+| `vrf_build_examples` / `vrf_build_tests` | `true` | Build examples / tests |
+
+Backend and window are also selectable at runtime:
+
+```sh
+VRI_API=vulkan  xmake run vrf_example_model_viewer path/to/model.gltf   # VRI's backend env var
+VRF_WINDOW=glfw xmake run vrf_example_model_viewer                      # window backend
+```
+
+## Examples
+
+`triangle` · `rt_triangle` · `xr_triangle` · `model_viewer` (OBJ/glTF) · `framegraph_deferred` ·
+`compute_saxpy` · `compute_rayquery` · `rt_inpaint` · `gaussian_splat` · `gaussian_rt`
+(run as `vrf_example_<name>`).
 
 ## Layout
 
 ```
-source/vrf/          the vrf static library (public headers under include/vrf/)
-  include/vrf/core       Error/Expected, logging (settable sink), glm math aliases
-  include/vrf/platform   Window (SDL3 + GLFW backends)
-  include/vrf/gpu        RenderDevice, Swapchain, Frame, RenderModule, upload, builders/
-  include/vrf/asset      vertex, mesh, material, texture, light, gaussian_splat, loaders/
-  include/vrf/app        Application (window + present loop over RenderModule)
-examples/            triangle, model_viewer (loads OBJ/glTF; Slang shaders)
-tests/               doctest tests
-external/            dependency declarations (add_requires)
-```
-
-Run the model viewer on a model (or a procedural cube with no argument):
-
-```sh
-xmake run vrf_example_model_viewer path/to/model.gltf   # or .glb / .obj
-VRF_WINDOW=glfw xmake run vrf_example_model_viewer       # pick the window backend
-VRI_API=vulkan  xmake run vrf_example_model_viewer       # pick the VRI backend (VRI's own env var)
+source/vrf/include/vrf/
+  core/       Expected/Error, logging, glm math, profiling zones
+  platform/   Window (SDL3 + GLFW)
+  gpu/        RenderDevice, Swapchain, Frame/FrameStream, RenderModule, RAII handles,
+              builders/, DescriptorTable, SamplerCache/ResourceCache, GpuProfiler,
+              ray tracing, HUD, ImGui backend, uploads, screenshot, shader library
+  fg/         framegraph — resource state tracking, RenderContext, transient pooling
+  xr/         StereoRig (sim + OpenXR), VrDriver, stereo math
+  asset/      mesh, material, texture, light, gaussian_splat, loaders/
+  app/        Application (RenderModule lives in gpu/)
+examples/     runnable samples (Slang shaders)
+tests/        doctest suite (GPU cases self-skip without a device)
 ```
 
 ## License
