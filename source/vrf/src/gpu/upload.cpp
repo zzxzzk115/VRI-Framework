@@ -185,28 +185,6 @@ namespace vrf
         }
     } // namespace
 
-    void GpuMesh::Destroy(RenderDevice& device)
-    {
-        const VriCoreInterface& c = device.Core();
-        if (indexBuffer)
-            c.DestroyBuffer(indexBuffer);
-        if (vertexBuffer)
-            c.DestroyBuffer(vertexBuffer);
-        vertexBuffer = nullptr;
-        indexBuffer  = nullptr;
-    }
-
-    void GpuTexture::Destroy(RenderDevice& device)
-    {
-        const VriCoreInterface& c = device.Core();
-        if (view)
-            c.DestroyDescriptor(view);
-        if (texture)
-            c.DestroyTexture(texture);
-        view    = nullptr;
-        texture = nullptr;
-    }
-
     Expected<GpuMesh> UploadMesh(RenderDevice& device, const Mesh& mesh, bool rtAccelInput)
     {
         if (mesh.positions.empty())
@@ -352,8 +330,8 @@ namespace vrf
             c.DestroyBuffer(indexStaging);
 
         GpuMesh out;
-        out.vertexBuffer = *vertexBuffer;
-        out.indexBuffer  = indexBuffer;
+        out.vertexBuffer = UniqueBuffer {device, *vertexBuffer};
+        out.indexBuffer  = UniqueBuffer {device, indexBuffer};
         out.vertexCount  = static_cast<uint32_t>(vcount);
         out.indexCount   = static_cast<uint32_t>(mesh.indices.size());
         out.indexType    = VriIndexType_UInt32;
@@ -517,8 +495,8 @@ namespace vrf
         }
 
         GpuTexture out;
-        out.texture = gpuTexture;
-        out.view    = view;
+        out.texture = UniqueTexture {device, gpuTexture};
+        out.view    = UniqueDescriptor {device, view};
         return out;
     }
 } // namespace vrf

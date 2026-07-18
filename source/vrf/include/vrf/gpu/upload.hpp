@@ -15,6 +15,7 @@
 #include "vrf/asset/mesh.hpp"
 #include "vrf/asset/texture.hpp"
 #include "vrf/core/result.hpp"
+#include "vrf/gpu/handle.hpp"
 #include "vrf/gpu/vertex_layout.hpp"
 
 namespace vrf
@@ -29,22 +30,18 @@ namespace vrf
     // the mesh, not a fixed vertex struct.
     struct GpuMesh
     {
-        VriBuffer*      vertexBuffer = nullptr;
-        VriBuffer*      indexBuffer  = nullptr;
-        uint32_t        vertexCount  = 0;
-        uint32_t        indexCount   = 0;
-        VriIndexType    indexType    = VriIndexType_UInt32;
+        UniqueBuffer    vertexBuffer;
+        UniqueBuffer    indexBuffer;
+        uint32_t        vertexCount = 0;
+        uint32_t        indexCount  = 0;
+        VriIndexType    indexType   = VriIndexType_UInt32;
         GpuVertexLayout layout;
-
-        void Destroy(RenderDevice& device);
     };
 
     struct GpuTexture
     {
-        VriTexture*    texture = nullptr;
-        VriDescriptor* view    = nullptr;
-
-        void Destroy(RenderDevice& device);
+        UniqueTexture    texture;
+        UniqueDescriptor view;
     };
 
     // rtAccelInput adds VriBufferUsage_AccelerationBuildInput to the vertex + index buffers so the
