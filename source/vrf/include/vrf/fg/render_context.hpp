@@ -215,5 +215,9 @@ namespace vrf::fg
 
     private:
         void BindDescriptorSets(const PassPipeline&);
+
+        // Reused across BindSingleDescriptorSet calls so per-draw descriptor binding does not
+        // heap-allocate a fresh view list every draw (recording is single-threaded).
+        std::vector<const VriDescriptor*> m_bindScratch;
     };
 } // namespace vrf::fg
