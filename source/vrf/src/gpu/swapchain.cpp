@@ -43,6 +43,24 @@ namespace vrf
         m_textures.assign(textures, textures + count);
     }
 
+    void Swapchain::AdoptActualExtent(const Extent2D requested)
+    {
+        // The window system dictates the real swapchain size (Vulkan surface currentExtent);
+        // during rapid resizes the caller's window metrics lag behind it. Extent() feeds render
+        // areas/viewports, so it must reflect the ACTUAL backbuffer - a render area larger than
+        // the attachment is undefined behavior (GPU faults -> black window).
+        m_extent = requested;
+        if (m_device->Swap().GetSwapChainExtent != nullptr)
+        {
+            uint32_t width = 0, height = 0;
+            if (m_device->Swap().GetSwapChainExtent(m_swapchain, &width, &height) == VriResult_Success &&
+                width != 0 && height != 0)
+            {
+                m_extent = {width, height};
+            }
+        }
+    }
+
     Expected<Swapchain> Swapchain::Create(RenderDevice& device, const SwapchainDesc& desc)
     {
         VriSwapChainDesc scd {};
@@ -63,7 +81,7 @@ namespace vrf
         swapchain.m_device    = &device;
         swapchain.m_swapchain = handle;
         swapchain.m_format    = desc.format;
-        swapchain.m_extent    = desc.extent;
+        swapchain.AdoptActualExtent(desc.extent);
         swapchain.RefreshTextures();
         return swapchain;
     }
@@ -77,15 +95,20 @@ namespace vrf
         return {index, false};
     }
 
-    void Swapchain::Present() { m_device->Swap().Present(m_swapchain, nullptr, 0); }
+    bool Swapchain::Present() { return m_device->Swap().Present(m_swapchain, nullptr, 0) == VriResult_Success; }
 
-    void Swapchain::Resize(Extent2D extent)
+    bool Swapchain::Resize(Extent2D extent)
     {
         if (extent.IsZero())
-            return;
-        m_device->Swap().Resize(m_swapchain, extent.width, extent.height);
-        m_extent = extent;
+            return false;
+        // Only commit new bookkeeping when the backend actually rebuilt the swapchain. On failure
+        // (minimized surface / transient zero currentExtent during a resize) the backend keeps
+        // the old swapchain, so the old bookkeeping must stay too.
+        if (m_device->Swap().Resize(m_swapchain, extent.width, extent.height) != VriResult_Success)
+            return false;
+        AdoptActualExtent(extent);
         RefreshTextures();
+        return true;
     }
 
     VriTexture* Swapchain::Texture(uint32_t index) const

@@ -44,8 +44,18 @@ namespace vrf
         [[nodiscard]] static Expected<Swapchain> Create(RenderDevice& device, const SwapchainDesc& desc);
 
         [[nodiscard]] AcquireResult Acquire();
-        void                        Present();
-        void                        Resize(Extent2D extent);
+        // Returns false when the backend reported the swapchain out of date / suboptimal at
+        // present time (the image may not have reached the screen). Acquire alone does NOT
+        // surface this on all drivers - a caller that ignores it can wedge on a black window
+        // after aggressive resizes; treat false like AcquireResult::outOfDate (rebuild).
+        bool Present();
+        // Rebuild the swapchain at `extent`. Returns false when the surface can't back a
+        // swapchain right now (zero extent / minimized / mid-resize transition) - the OLD
+        // swapchain and Extent() bookkeeping are kept untouched so the caller's
+        // "window != swapchain" retry keeps firing until a rebuild succeeds. (Committing the
+        // extent on a failed rebuild wedged apps in a black-screen acquire-outOfDate loop:
+        // the sizes looked equal, so nothing ever retried.)
+        bool Resize(Extent2D extent);
 
         [[nodiscard]] VriTexture*   Texture(uint32_t index) const;
         [[nodiscard]] uint32_t      TextureCount() const noexcept { return static_cast<uint32_t>(m_textures.size()); }
@@ -56,6 +66,9 @@ namespace vrf
     private:
         void Reset() noexcept;
         void RefreshTextures();
+        // Set m_extent to the backend's ACTUAL swapchain size (window systems may override the
+        // requested one); falls back to `requested` on backends without GetSwapChainExtent.
+        void AdoptActualExtent(Extent2D requested);
 
         RenderDevice*            m_device    = nullptr;
         VriSwapChain*            m_swapchain = nullptr;
