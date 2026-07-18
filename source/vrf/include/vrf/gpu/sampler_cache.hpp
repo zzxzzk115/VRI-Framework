@@ -22,7 +22,7 @@ namespace vrf
         struct SamplerKey
         {
             VriSamplerDesc desc;
-            bool operator==(const SamplerKey& o) const noexcept
+            bool           operator==(const SamplerKey& o) const noexcept
             {
                 return std::memcmp(&desc, &o.desc, sizeof(desc)) == 0; // exact bytes -> no collision aliasing
             }

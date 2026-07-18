@@ -16,8 +16,8 @@ namespace vrf
         r.shaderStages   = m_desc.stages;
         // True bindless: a variable-sized (runtime) array whose tail may be left unbound. Fallback:
         // a plain fixed array (every slot must be written - see Commit's fallback fill).
-        r.flags    = m_bindless ? (VriDescriptorRange_VariableSized | VriDescriptorRange_PartiallyBound)
-                                : VriDescriptorRange_None;
+        r.flags    = m_bindless ? (VriDescriptorRange_VariableSized | VriDescriptorRange_PartiallyBound) :
+                                  VriDescriptorRange_None;
         r.viewType = m_desc.viewType;
         return r;
     }
@@ -78,7 +78,8 @@ namespace vrf
         t.m_pool = UniqueDescriptorPool {device, pool};
 
         // 3) Allocate the one set (setIndex == the set's register space, per VRI's convention).
-        if (const auto r = device.Core().AllocateDescriptorSets(pool, t.m_layout.get(), desc.registerSpace, &t.m_set, 1);
+        if (const auto r =
+                device.Core().AllocateDescriptorSets(pool, t.m_layout.get(), desc.registerSpace, &t.m_set, 1);
             !Succeeded(r))
         {
             return MakeError(r, "DescriptorTable::Create", "AllocateDescriptorSets failed");
@@ -131,9 +132,8 @@ namespace vrf
                 }
             }
         }
-        const VriDescriptorRangeUpdateDesc update {.descriptors   = m_entries.data(),
-                                                   .descriptorNum = m_desc.capacity,
-                                                   .baseDescriptor = 0};
+        const VriDescriptorRangeUpdateDesc update {
+            .descriptors = m_entries.data(), .descriptorNum = m_desc.capacity, .baseDescriptor = 0};
         m_device->Core().UpdateDescriptorRanges(m_set, /*baseRange=*/0, /*rangeNum=*/1, &update);
         m_dirty = false;
     }

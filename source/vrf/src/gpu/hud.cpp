@@ -59,19 +59,20 @@ namespace vrf
         blend.dstAlpha = VriBlendFactor_OneMinusSrcAlpha;
         blend.alphaOp  = VriBlendOp_Add;
 
-        auto pipeline = GraphicsPipelineBuilder {}
-                            .SetPipelineLayout(m_layout)
-                            .AddShader(VriShaderStage_Vertex, m_vsSpirv.data(), m_vsSpirv.size() * sizeof(uint32_t),
-                                       m_vsEntry.c_str())
-                            .AddShader(VriShaderStage_Fragment, m_fsSpirv.data(), m_fsSpirv.size() * sizeof(uint32_t),
-                                       m_fsEntry.c_str())
-                            .SetTopology(VriPrimitiveTopology_TriangleList)
-                            .SetCullMode(VriCullMode_None)
-                            .AddVertexStream(sizeof(Vertex), 0)
-                            .AddVertexAttribute(VriFormat_RG32_SFLOAT, offsetof(Vertex, pos), 0)   // POSITION
-                            .AddVertexAttribute(VriFormat_RGBA32_SFLOAT, offsetof(Vertex, col), 0) // COLOR0
-                            .AddColorAttachment(colorFormat, VriColorWrite_RGBA, blend)
-                            .Build(*m_device);
+        auto pipeline =
+            GraphicsPipelineBuilder {}
+                .SetPipelineLayout(m_layout)
+                .AddShader(
+                    VriShaderStage_Vertex, m_vsSpirv.data(), m_vsSpirv.size() * sizeof(uint32_t), m_vsEntry.c_str())
+                .AddShader(
+                    VriShaderStage_Fragment, m_fsSpirv.data(), m_fsSpirv.size() * sizeof(uint32_t), m_fsEntry.c_str())
+                .SetTopology(VriPrimitiveTopology_TriangleList)
+                .SetCullMode(VriCullMode_None)
+                .AddVertexStream(sizeof(Vertex), 0)
+                .AddVertexAttribute(VriFormat_RG32_SFLOAT, offsetof(Vertex, pos), 0)   // POSITION
+                .AddVertexAttribute(VriFormat_RGBA32_SFLOAT, offsetof(Vertex, col), 0) // COLOR0
+                .AddColorAttachment(colorFormat, VriColorWrite_RGBA, blend)
+                .Build(*m_device);
         if (!pipeline)
             return nullptr;
         m_pipelines.push_back({colorFormat, *pipeline});
@@ -141,8 +142,8 @@ namespace vrf
             return;
         static thread_local std::vector<char> buffer;
         buffer.resize(str.size() * 270 + 512);
-        const int quads = stb_easy_font_print(0.0f, 0.0f, const_cast<char*>(str.c_str()), nullptr, buffer.data(),
-                                              static_cast<int>(buffer.size()));
+        const int quads = stb_easy_font_print(
+            0.0f, 0.0f, const_cast<char*>(str.c_str()), nullptr, buffer.data(), static_cast<int>(buffer.size()));
         struct StbVert
         {
             float         x, y, z;
@@ -176,10 +177,10 @@ namespace vrf
     {
         if (!m_device || m_vertices.empty())
             return {};
-        m_ring                 = (m_ring + 1) % kRing;
-        const uint32_t count   = static_cast<uint32_t>(m_vertices.size());
-        const auto&    core    = m_device->Core();
-        const uint64_t bytes   = m_vertices.size() * sizeof(Vertex);
+        m_ring               = (m_ring + 1) % kRing;
+        const uint32_t count = static_cast<uint32_t>(m_vertices.size());
+        const auto&    core  = m_device->Core();
+        const uint64_t bytes = m_vertices.size() * sizeof(Vertex);
         if (m_capacities[m_ring] < bytes)
         {
             if (m_buffers[m_ring])
@@ -217,9 +218,9 @@ namespace vrf
         core.CmdSetPipelineLayout(rc.cmd, m_layout);
         core.CmdSetPipeline(rc.cmd, pipeline);
 
-        const HudPush push {glm::vec2 {1.0f / static_cast<float>(targetExtent.width),
-                                       1.0f / static_cast<float>(targetExtent.height)},
-                            glm::vec2 {0.0f}};
+        const HudPush push {
+            glm::vec2 {1.0f / static_cast<float>(targetExtent.width), 1.0f / static_cast<float>(targetExtent.height)},
+            glm::vec2 {0.0f}};
         core.CmdSetConstants(rc.cmd, 0, &push, sizeof(push));
 
         const VriVertexBufferBinding vb {m_buffers[batch.ring], 0};

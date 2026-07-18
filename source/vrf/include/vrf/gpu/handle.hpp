@@ -82,10 +82,10 @@ namespace vrf
             return *this;
         }
 
-        [[nodiscard]] T*   get() const noexcept { return m_handle; }
-        [[nodiscard]] T*   operator*() const noexcept { return m_handle; }
-        [[nodiscard]]      operator T*() const noexcept { return m_handle; } // NOLINT: implicit for VRI calls
-        [[nodiscard]]      explicit operator bool() const noexcept { return m_handle != nullptr; }
+        [[nodiscard]] T* get() const noexcept { return m_handle; }
+        [[nodiscard]] T* operator*() const noexcept { return m_handle; }
+        [[nodiscard]] operator T*() const noexcept { return m_handle; } // NOLINT: implicit for VRI calls
+        [[nodiscard]] explicit operator bool() const noexcept { return m_handle != nullptr; }
 
         // Relinquish ownership (caller now frees it).
         [[nodiscard]] T* release() noexcept { return std::exchange(m_handle, nullptr); }

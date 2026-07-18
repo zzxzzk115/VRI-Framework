@@ -53,9 +53,9 @@ namespace vrf
         [[nodiscard]] explicit operator bool() const noexcept { return m_device != nullptr; }
 
         // ---- batch (coordinates in target pixels, origin top-left) ----
-        void clear() noexcept { m_vertices.clear(); }
-        void rect(float x, float y, float w, float h, const glm::vec4& color);
-        void text(const std::string& str, float x, float y, float scale, const glm::vec4& color);
+        void                clear() noexcept { m_vertices.clear(); }
+        void                rect(float x, float y, float w, float h, const glm::vec4& color);
+        void                text(const std::string& str, float x, float y, float scale, const glm::vec4& color);
         [[nodiscard]] float textWidth(const std::string& str, float scale) const;
         [[nodiscard]] float textHeight(float scale) const;
 
@@ -75,7 +75,7 @@ namespace vrf
         void draw(fg::RenderContext&, Extent2D targetExtent, VriFormat colorFormat, const Batch& batch);
 
     private:
-        void                reset() noexcept;
+        void                       reset() noexcept;
         [[nodiscard]] VriPipeline* pipelineFor(VriFormat colorFormat);
 
         struct Vertex

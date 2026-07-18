@@ -164,14 +164,12 @@ namespace vrf
 
         // Optional dedicated queues for async compute / DMA transfer. Backends without a distinct
         // queue (Metal/MoltenVK) fail GetQueue here; fall back to graphics so callers always submit.
-        VriQueue* q         = nullptr;
-        out.m_computeQueue  = (core.GetQueue(device, VriQueueType_Compute, 0, &q) == VriResult_Success && q)
-                                  ? q
-                                  : graphicsQueue;
-        q                   = nullptr;
-        out.m_transferQueue = (core.GetQueue(device, VriQueueType_Transfer, 0, &q) == VriResult_Success && q)
-                                  ? q
-                                  : graphicsQueue;
+        VriQueue* q = nullptr;
+        out.m_computeQueue =
+            (core.GetQueue(device, VriQueueType_Compute, 0, &q) == VriResult_Success && q) ? q : graphicsQueue;
+        q = nullptr;
+        out.m_transferQueue =
+            (core.GetQueue(device, VriQueueType_Transfer, 0, &q) == VriResult_Success && q) ? q : graphicsQueue;
         LogInfo("vrf: queues - graphics + {} compute + {} transfer",
                 out.HasDedicatedComputeQueue() ? "dedicated" : "shared",
                 out.HasDedicatedTransferQueue() ? "dedicated" : "shared");

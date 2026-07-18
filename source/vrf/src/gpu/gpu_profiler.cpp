@@ -105,8 +105,8 @@ namespace vrf
         {
             return;
         }
-        m_current   = frameIndex % static_cast<uint32_t>(m_slots.size());
-        Slot& slot  = m_slots[m_current];
+        m_current  = frameIndex % static_cast<uint32_t>(m_slots.size());
+        Slot& slot = m_slots[m_current];
 
         // Resolve the results this slot copied on its previous submit (complete now: FrameStream::Begin
         // waited on the slot's fence before returning). Read back BEFORE resetting the pool.

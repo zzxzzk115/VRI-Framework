@@ -48,20 +48,21 @@ TEST_CASE("DescriptorTable: fixed-fallback populate/commit (skips without a devi
         }
     });
 
-    constexpr uint8_t kWhite[4] = {255, 255, 255, 255};
-    constexpr uint8_t kRed[4]   = {255, 0, 0, 255};
-    constexpr uint8_t kGreen[4] = {0, 255, 0, 255};
-    const vrf::GpuTexture white = MakeSolid(*device, kWhite);
-    const vrf::GpuTexture red   = MakeSolid(*device, kRed);
-    const vrf::GpuTexture green = MakeSolid(*device, kGreen);
+    constexpr uint8_t     kWhite[4] = {255, 255, 255, 255};
+    constexpr uint8_t     kRed[4]   = {255, 0, 0, 255};
+    constexpr uint8_t     kGreen[4] = {0, 255, 0, 255};
+    const vrf::GpuTexture white     = MakeSolid(*device, kWhite);
+    const vrf::GpuTexture red       = MakeSolid(*device, kRed);
+    const vrf::GpuTexture green     = MakeSolid(*device, kGreen);
 
     errorCount = 0;
-    auto table = vrf::DescriptorTable::Create(*device, {.type               = VriDescriptorType_Texture,
-                                                        .capacity           = 64,
-                                                        .registerSpace      = 0,
-                                                        .baseRegister       = 0,
-                                                        .stages             = VriShaderStage_Compute,
-                                                        .fallbackDescriptor = white.view.get()});
+    auto table = vrf::DescriptorTable::Create(*device,
+                                              {.type               = VriDescriptorType_Texture,
+                                               .capacity           = 64,
+                                               .registerSpace      = 0,
+                                               .baseRegister       = 0,
+                                               .stages             = VriShaderStage_Compute,
+                                               .fallbackDescriptor = white.view.get()});
     REQUIRE(table.has_value());
     CHECK(table->Capacity() == 64);
     CHECK(table->DescriptorSet() != nullptr);

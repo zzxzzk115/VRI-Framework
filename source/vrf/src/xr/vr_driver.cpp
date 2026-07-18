@@ -40,8 +40,8 @@ namespace vrf::xr
     };
 
     VrDriver::VrDriver() : m_impl {std::make_unique<Impl>()} {}
-    VrDriver::~VrDriver()                            = default;
-    VrDriver::VrDriver(VrDriver&&) noexcept          = default;
+    VrDriver::~VrDriver()                              = default;
+    VrDriver::VrDriver(VrDriver&&) noexcept            = default;
     VrDriver& VrDriver::operator=(VrDriver&&) noexcept = default;
 
     VrDriver VrDriver::Probe(const VrDriverDesc& desc)

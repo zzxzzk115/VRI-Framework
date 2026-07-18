@@ -70,17 +70,11 @@ namespace vrf
             }
         }
         // Whether the backend gave a physically distinct queue (async compute / DMA transfer possible).
-        [[nodiscard]] bool HasDedicatedComputeQueue() const noexcept
-        {
-            return m_computeQueue != m_graphicsQueue;
-        }
-        [[nodiscard]] bool HasDedicatedTransferQueue() const noexcept
-        {
-            return m_transferQueue != m_graphicsQueue;
-        }
-        [[nodiscard]] const VriDeviceDesc*         Desc() const noexcept { return m_desc; }
-        [[nodiscard]] VriGraphicsAPI               Api() const noexcept { return m_api; }
-        [[nodiscard]] const char*                  ApiName() const noexcept;
+        [[nodiscard]] bool HasDedicatedComputeQueue() const noexcept { return m_computeQueue != m_graphicsQueue; }
+        [[nodiscard]] bool HasDedicatedTransferQueue() const noexcept { return m_transferQueue != m_graphicsQueue; }
+        [[nodiscard]] const VriDeviceDesc* Desc() const noexcept { return m_desc; }
+        [[nodiscard]] VriGraphicsAPI       Api() const noexcept { return m_api; }
+        [[nodiscard]] const char*          ApiName() const noexcept;
 
         [[nodiscard]] explicit operator bool() const noexcept { return m_device != nullptr; }
 
