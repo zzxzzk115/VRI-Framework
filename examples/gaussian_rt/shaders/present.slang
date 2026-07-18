@@ -16,8 +16,11 @@ struct VSOutput
 
 [shader("vertex")] VSOutput vertexMain(uint vertexId : SV_VertexID) {
     VSOutput o;
-    o.uv      = float2((vertexId << 1) & 2, vertexId & 2);
-    o.clipPos = float4(o.uv * 2.0 - 1.0, 0.0, 1.0);
+    o.uv = float2((vertexId << 1) & 2, vertexId & 2);
+    // VRI is Y-up (clip +Y = screen top). The source is a compute-written storage
+    // texture in image orientation (row 0 = top), so map uv.y=0 -> clip +1 for an
+    // identity row copy; the raster-style `uv * 2 - 1` would display it flipped.
+    o.clipPos = float4(o.uv.x * 2.0 - 1.0, 1.0 - o.uv.y * 2.0, 0.0, 1.0);
     return o;
 }
 
