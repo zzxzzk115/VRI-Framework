@@ -339,7 +339,8 @@ namespace vrf::fg
             {
                 const auto& range = setLayout.ranges[rangeIndex];
 
-                std::vector<const VriDescriptor*> views;
+                auto& views = m_bindScratch; // reused per draw - no per-draw heap allocation
+                views.clear();
                 views.reserve(range.descriptorNum);
                 for (uint32_t i = 0; i < range.descriptorNum; ++i)
                 {
