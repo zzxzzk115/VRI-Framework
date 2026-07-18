@@ -2,37 +2,55 @@
  * sampler_cache.hpp - desc-keyed sampler descriptor cache. Samplers are tiny
  * immutable objects requested repeatedly with identical state (per pass, per
  * material); the cache hands back one VriDescriptor per distinct desc and owns
- * them all.
+ * them all. A thin wrapper over the generic ResourceCache: keyed by the full
+ * desc (memcmp equality, so no hash-collision mix-ups) with RAII handles.
  */
 #pragma once
 
-#include <unordered_map>
+#include <cstring>
 
 #include <vri/vri.h>
+
+#include "vrf/gpu/resource_cache.hpp"
 
 namespace vrf
 {
     class RenderDevice;
 
+    namespace detail
+    {
+        struct SamplerKey
+        {
+            VriSamplerDesc desc;
+            bool operator==(const SamplerKey& o) const noexcept
+            {
+                return std::memcmp(&desc, &o.desc, sizeof(desc)) == 0; // exact bytes -> no collision aliasing
+            }
+        };
+        struct SamplerKeyHash
+        {
+            size_t operator()(const SamplerKey& k) const noexcept { return HashPodBytes(k.desc); }
+        };
+    } // namespace detail
+
     class SamplerCache
     {
     public:
         SamplerCache() = default;
-        explicit SamplerCache(RenderDevice& device) : m_device {&device} {}
-        ~SamplerCache();
+        explicit SamplerCache(RenderDevice& device) : m_device {&device}, m_cache {device} {}
 
-        SamplerCache(const SamplerCache&)            = delete;
-        SamplerCache& operator=(const SamplerCache&) = delete;
-        SamplerCache(SamplerCache&& other) noexcept;
-        SamplerCache& operator=(SamplerCache&& other) noexcept;
+        SamplerCache(const SamplerCache&)                = delete;
+        SamplerCache& operator=(const SamplerCache&)     = delete;
+        SamplerCache(SamplerCache&&) noexcept            = default;
+        SamplerCache& operator=(SamplerCache&&) noexcept = default;
 
         // Cached create-or-return; nullptr on creation failure.
         [[nodiscard]] VriDescriptor* Get(const VriSamplerDesc&);
 
-        void Clear() noexcept;
+        void Clear() noexcept { m_cache.Clear(); }
 
     private:
-        RenderDevice*                              m_device = nullptr;
-        std::unordered_map<size_t, VriDescriptor*> m_samplers;
+        RenderDevice*                                                            m_device {nullptr};
+        ResourceCache<detail::SamplerKey, VriDescriptor, detail::SamplerKeyHash> m_cache;
     };
 } // namespace vrf
