@@ -464,6 +464,17 @@ int main(int, char**)
             std::printf("[rt-inpaint] screenshot -> %s\n", shotPath);
     }
 
+    for (auto& [_, s] : samplers)
+        core.DestroyDescriptor(s);
+    core.DestroyDescriptor(vertexView);
+    core.DestroyDescriptor(colorView);
+    core.DestroyBuffer(vertexBuffer);
+    core.DestroyBuffer(colorBuffer);
+    core.DestroyPipeline(rtPipeline);
+    core.DestroyPipeline(presentPipeline.pipeline);
+    core.DestroyPipelineLayout(rtLayout->handle);
+    core.DestroyPipelineLayout(presentPipeline.layout->handle);
+
     std::printf("[rt-inpaint] frames: %llu, triangles: %u\n", static_cast<unsigned long long>(frameCount), triCount);
     return 0;
 }

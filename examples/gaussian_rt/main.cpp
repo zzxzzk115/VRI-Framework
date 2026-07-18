@@ -483,6 +483,19 @@ int main(int argc, char** argv)
             std::printf("[gaussian-rt] screenshot -> %s\n", shotPath);
     }
 
+    for (auto& [_, s] : samplers)
+        core.DestroyDescriptor(s);
+    core.DestroyDescriptor(splatView);
+    core.DestroyDescriptor(aabbView);
+    core.DestroyBuffer(splatBuffer);
+    core.DestroyBuffer(aabbBuffer);
+    core.DestroyPipeline(genPipeline);
+    core.DestroyPipeline(rtPipeline);
+    core.DestroyPipeline(presentPipeline.pipeline);
+    core.DestroyPipelineLayout(genLayout->handle);
+    core.DestroyPipelineLayout(rtLayout->handle);
+    core.DestroyPipelineLayout(presentPipeline.layout->handle);
+
     std::printf("[gaussian-rt] frames: %llu, splats: %u\n", static_cast<unsigned long long>(frameCount), splatCount);
     return 0;
 }
