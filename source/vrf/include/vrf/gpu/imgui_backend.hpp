@@ -63,6 +63,13 @@ namespace vrf
         // Record the UI draws; inside an open color pass matching colorFormat.
         void CmdDraw(VriCommandBuffer* cmd);
 
+        // Evict a texture view from the renderer's per-view descriptor-set cache. MUST be
+        // called before destroying any view that was ever used as an ImTextureID: the cache
+        // is keyed by pointer, so a later texture whose descriptor reuses the freed address
+        // would otherwise bind the stale set (destroyed imageView -> GPU fault, and on
+        // Windows a black window after aggressive resizes).
+        void FreeTexture(VriDescriptor* textureView);
+
     private:
         void Reset() noexcept;
 
