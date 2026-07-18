@@ -194,7 +194,7 @@ int main()
         const VriBarrierGroupDesc barriers {.buffers = &barrier, .bufferNum = 1};
         core.CmdBarrier(cmd, &barriers);
 
-        const VriBufferCopyDesc copy {.dstOffset = 0, .srcOffset = 0, .size = readbackDesc.size};
+        const VriBufferCopyDesc copy {.srcOffset = 0, .dstOffset = 0, .size = readbackDesc.size};
         core.CmdCopyBuffer(cmd, readback, yBuffer, &copy);
     }
     frame.Submit(); // synchronous: waits for the GPU

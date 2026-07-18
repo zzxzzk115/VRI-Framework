@@ -194,7 +194,7 @@ int main()
                                        .after  = {VriAccess_CopySourceRead, VriPipelineStage_Transfer}};
         const VriBarrierGroupDesc  bg {.buffers = &bb, .bufferNum = 1};
         core.CmdBarrier(cmd, &bg);
-        const VriBufferCopyDesc copy {.dstOffset = 0, .srcOffset = 0, .size = outSize};
+        const VriBufferCopyDesc copy {.srcOffset = 0, .dstOffset = 0, .size = outSize};
         core.CmdCopyBuffer(cmd, readback, outBuffer, &copy);
     }
     frame.Submit();

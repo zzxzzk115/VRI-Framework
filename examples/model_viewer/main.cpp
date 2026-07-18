@@ -18,6 +18,7 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -267,8 +268,8 @@ int main(int argc, char** argv)
         std::fprintf(stderr, "[vrf-model-viewer] default textures failed\n");
         return 1;
     }
-    vrf::GpuTexture white      = *whiteResult;
-    vrf::GpuTexture flatNormal = *flatResult;
+    vrf::GpuTexture white      = std::move(*whiteResult);
+    vrf::GpuTexture flatNormal = std::move(*flatResult);
 
     // ---- pipeline layout: push constants + descriptor set 0 (UBO + 5 textures + sampler) ----
     std::vector<VriDescriptorRangeDesc> ranges;
@@ -339,10 +340,7 @@ int main(int argc, char** argv)
         }
         if (scene.pool)
             c.DestroyDescriptorPool(scene.pool);
-        for (vrf::GpuTexture& t : scene.textures)
-            t.Destroy(device);
-        scene.mesh.Destroy(device);
-        scene = Scene {};
+        scene = Scene {}; // GpuMesh / GpuTexture handles are RAII; reassignment frees them
     };
 
     const auto buildScene = [&]() {
@@ -352,7 +350,7 @@ int main(int argc, char** argv)
             status = "upload failed: " + uploaded.error().message;
             return;
         }
-        scene.mesh = *uploaded;
+        scene.mesh = std::move(*uploaded);
 
         // Resolve the shader variant matching this mesh's vertex attributes and build a pipeline.
         const std::vector<vrf::ShaderKeyword> keywords = vrf::ShaderKeywordsForVertexLayout(scene.mesh.layout);
@@ -399,7 +397,7 @@ int main(int argc, char** argv)
         for (const vrf::Texture& tex : cpuMesh.textures)
         {
             auto gpu = vrf::UploadTexture(device, tex);
-            scene.textures.push_back(gpu ? *gpu : vrf::GpuTexture {});
+            scene.textures.push_back(gpu ? std::move(*gpu) : vrf::GpuTexture {});
         }
 
         const uint32_t        materialCount = static_cast<uint32_t>(cpuMesh.materials.size()) + 1; // +1 default
@@ -607,8 +605,6 @@ int main(int argc, char** argv)
 
     device.WaitIdle();
     destroyScene();
-    white.Destroy(device);
-    flatNormal.Destroy(device);
     c.DestroyDescriptor(sampler);
     c.DestroyPipelineLayout(layout);
     return 0;
