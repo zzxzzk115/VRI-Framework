@@ -172,7 +172,7 @@ TEST_CASE("GPU upload: BC3 fixture + multi-mip (skips without a device)")
         REQUIRE(result.has_value());
         CHECK(result->texture != nullptr);
         CHECK(errorCount == 0);
-        result->Destroy(*device);
+        // RAII: GpuTexture frees itself at scope exit (no Destroy()).
     }
 
     // (2) Synthetic uncompressed RGBA8 with two mips (2x2 then 1x1) - the multi-mip path.
@@ -190,7 +190,7 @@ TEST_CASE("GPU upload: BC3 fixture + multi-mip (skips without a device)")
         auto result = vrf::UploadTexture(*device, tex);
         REQUIRE(result.has_value());
         CHECK(errorCount == 0);
-        result->Destroy(*device);
+        // RAII: GpuTexture frees itself at scope exit (no Destroy()).
     }
 
     vrf::SetLogSink({});
