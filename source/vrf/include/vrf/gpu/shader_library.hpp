@@ -41,6 +41,11 @@ namespace vrf
         Vertex,
         Fragment,
         Geometry,
+        // Tessellation control / evaluation (HLSL hull / domain). Cooking these needs a
+        // vshadersystem that maps SLANG_STAGE_HULL/_DOMAIN; older cookers silently drop
+        // such entry points, so Resolve() reports "not found" rather than misbehaving.
+        TessControl,
+        TessEval,
         Compute,
         Task,
         Mesh,

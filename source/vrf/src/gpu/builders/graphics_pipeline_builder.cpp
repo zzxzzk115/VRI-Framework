@@ -105,6 +105,7 @@ namespace vrf
             desc.vertexInput.streamNum = static_cast<uint32_t>(m_vertexStreams.size());
         }
         desc.inputAssembly = m_inputAssembly;
+        desc.tessellation  = m_tessellation;
         desc.rasterization = m_rasterization;
         desc.multisample   = m_multisample;
         desc.depthStencil  = m_depthStencil;

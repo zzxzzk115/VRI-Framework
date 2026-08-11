@@ -17,14 +17,23 @@
 namespace vrf::fg
 {
     // Shader/transfer stages a binding is visible to. Combinable.
+    //
+    // NOTE: the value is bit-packed into BindingInfo with kPipelineStageBits width
+    // (resource_access.cpp). Adding a flag past the top one requires widening that
+    // constant *and* kBindingInfoBits by the same amount.
     enum class PipelineStage : uint32_t
     {
-        Transfer         = 1u << 0,
-        VertexShader     = 1u << 1,
-        GeometryShader   = 1u << 2,
-        FragmentShader   = 1u << 3,
-        ComputeShader    = 1u << 4,
-        RayTracingShader = 1u << 5,
+        Transfer          = 1u << 0,
+        VertexShader      = 1u << 1,
+        GeometryShader    = 1u << 2,
+        FragmentShader    = 1u << 3,
+        ComputeShader     = 1u << 4,
+        RayTracingShader  = 1u << 5,
+        TessControlShader = 1u << 6,
+        TessEvalShader    = 1u << 7,
+        // For a buffer read as draw/dispatch arguments by CmdDraw*Indirect /
+        // CmdDispatchIndirect - the consumer is the command processor, not a shader.
+        DrawIndirect      = 1u << 8,
     };
     [[nodiscard]] constexpr PipelineStage operator|(PipelineStage a, PipelineStage b)
     {

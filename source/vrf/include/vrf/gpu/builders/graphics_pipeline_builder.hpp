@@ -62,6 +62,24 @@ namespace vrf
             return *this;
         }
 
+        // Treat the max index value (0xFFFF / 0xFFFFFFFF for the bound index type) as a strip
+        // break instead of a vertex. Required for indexed *Strip / *Fan topologies that pack
+        // many runs into one draw - e.g. a per-row grid mesh as a single triangle strip.
+        GraphicsPipelineBuilder& SetPrimitiveRestart(bool enabled)
+        {
+            m_inputAssembly.primitiveRestart = enabled ? VRI_TRUE : VRI_FALSE;
+            return *this;
+        }
+
+        // Vertices per patch for a tessellated pipeline (0 = no tessellation). Pair with
+        // SetTopology(VriPrimitiveTopology_PatchList) and tess control/eval shader stages;
+        // gate on VriDeviceDesc::hasTessellation.
+        GraphicsPipelineBuilder& SetPatchControlPoints(uint32_t patchControlPoints)
+        {
+            m_tessellation.patchControlPoints = patchControlPoints;
+            return *this;
+        }
+
         GraphicsPipelineBuilder& SetCullMode(VriCullMode cullMode)
         {
             m_rasterization.cullMode = cullMode;
@@ -168,6 +186,7 @@ namespace vrf
         std::vector<VriVertexAttributeDesc> m_vertexAttributes;
         std::vector<VriVertexStreamDesc>    m_vertexStreams;
         VriInputAssemblyDesc                m_inputAssembly {};
+        VriTessellationDesc                 m_tessellation {};
         VriRasterizationDesc                m_rasterization {};
         VriMultisampleDesc                  m_multisample {};
         VriDepthStencilDesc                 m_depthStencil {};
