@@ -49,22 +49,25 @@ namespace vrf::fg
         constexpr auto kBindingIndexOffset = kSetIndexOffset + kSetIndexBits;
 
         //
-        // BindingInfo (14 bits):
+        // BindingInfo (17 bits):
         //
-        // |  1 bit   |  7 bits  |    6 bits     |
+        // |  1 bit   |  7 bits  |    9 bits     |
         // | reserved | location | pipelineStage |
 
-        constexpr auto kBindingInfoBits = 14;
+        constexpr auto kBindingInfoBits = 17;
 
-        constexpr auto kPipelineStageBits = 6;
+        constexpr auto kPipelineStageBits = 9;
 
         constexpr auto kLocationOffset      = kReservedBits;
         constexpr auto kPipelineStageOffset = kLocationOffset + kLocationBits;
 
+        static_assert(kBindingInfoBits >= kReservedBits + kLocationBits + kPipelineStageBits,
+                      "BindingInfo must be wide enough to hold the marker, location and stage mask");
+
         //
-        // TextureRead (17 bits):
+        // TextureRead (21 bits):
         //
-        // |   14 bits   |  2 bits  |  2 bits  |
+        // |   17 bits   |  2 bits  |  2 bits  |
         // | bindingInfo |   type   |  aspect  |
 
         constexpr auto kTypeBits = 2;
@@ -217,6 +220,18 @@ namespace vrf::fg
         if (static_cast<bool>(pipelineStage & PipelineStage::RayTracingShader))
         {
             mask |= VriPipelineStage_RayTracingShader;
+        }
+        if (static_cast<bool>(pipelineStage & PipelineStage::TessControlShader))
+        {
+            mask |= VriPipelineStage_TessControlShader;
+        }
+        if (static_cast<bool>(pipelineStage & PipelineStage::TessEvalShader))
+        {
+            mask |= VriPipelineStage_TessEvalShader;
+        }
+        if (static_cast<bool>(pipelineStage & PipelineStage::DrawIndirect))
+        {
+            mask |= VriPipelineStage_DrawIndirect;
         }
         return mask;
     }
