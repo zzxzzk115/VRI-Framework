@@ -25,12 +25,14 @@ add_requires("fg")
 -- v1.1.0 adds DXBC/DXIL bytecode targets + `vshaderc strip`, so a cooked .vshlib can carry
 -- Vulkan/OpenGL/Metal (SPIR-V), WebGPU (WGSL) and Direct3D 12 (DXBC/DXIL) and be stripped to the
 -- shipping targets. (v1.0.1 already defaulted the matrix layout to column-major for glm.)
-add_requires("vshadersystem v1.1.0", {configs = {debug = is_mode("debug")}})
+-- v1.2.0 adds tessellation (hull/domain) entry-point cooking, which vrf::ShaderStage::
+-- TessControl/TessEval resolve against.
+add_requires("vshadersystem v1.2.0", {configs = {debug = is_mode("debug")}})
 
 -- Offline cook tool (the vshaderc CLI) - opt-in, to regenerate the committed .vshlib and to strip
 -- it to the compiled-in backends at build time.
 if has_config("vrf_cook_shaders") then
-    add_requires("vshadersystem~host v1.1.0", {kind = "binary"})
+    add_requires("vshadersystem~host v1.2.0", {kind = "binary"})
 end
 
 -- Minimal single-header asset loaders (used only inside the loader .cpp files).

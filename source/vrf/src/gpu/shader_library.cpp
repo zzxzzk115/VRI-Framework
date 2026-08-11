@@ -24,21 +24,12 @@ namespace vrf
                     return vsh::ShaderStage::eFrag;
                 case ShaderStage::Geometry:
                     return vsh::ShaderStage::eGeom;
-#if defined(VSHADERSYSTEM_HAS_TESSELLATION_STAGES)
+                // Needs vshadersystem >= v1.2.0; older cookers dropped hull/domain entry
+                // points silently, so Resolve() would report "not found" for these.
                 case ShaderStage::TessControl:
                     return vsh::ShaderStage::eHull;
                 case ShaderStage::TessEval:
                     return vsh::ShaderStage::eDomain;
-#else
-                // This vshadersystem has no hull/domain stage, so the cooker dropped any such
-                // entry point from the .vshlib. Fail loudly here instead of resolving to some
-                // other stage's bytecode - the caller is expected to fall back.
-                case ShaderStage::TessControl:
-                case ShaderStage::TessEval:
-                    return MakeError(VriResult_Unsupported,
-                                     "ShaderLibrary: this vshadersystem cannot cook tessellation "
-                                     "(hull/domain) stages");
-#endif
                 case ShaderStage::Compute:
                     return vsh::ShaderStage::eComp;
                 case ShaderStage::Task:
