@@ -21,18 +21,17 @@
 
 namespace vrf::ui
 {
-    template <typename Ctx>
+    template<typename Ctx>
     class UIWindowManager;
 
-    template <typename Ctx>
+    template<typename Ctx>
     class UIWindow
     {
     public:
         // `name` is the stable identity ("###name"); `displayName` is the visible label
         // (defaults to the name). Changing the display later keeps docking/ini intact.
         explicit UIWindow(std::string name, std::string displayName = {}) :
-            m_Name {std::move(name)},
-            m_DisplayName {displayName.empty() ? m_Name : std::move(displayName)},
+            m_Name {std::move(name)}, m_DisplayName {displayName.empty() ? m_Name : std::move(displayName)},
             m_Title {m_DisplayName + "###" + m_Name}
         {}
         virtual ~UIWindow() = default;
@@ -65,11 +64,11 @@ namespace vrf::ui
         friend class UIWindowManager<Ctx>;
     };
 
-    template <typename Ctx>
+    template<typename Ctx>
     class UIWindowManager
     {
     public:
-        template <typename T, typename... Args>
+        template<typename T, typename... Args>
         T& add(Args&&... args)
         {
             static_assert(std::is_base_of_v<UIWindow<Ctx>, T>, "T must derive from UIWindow<Ctx>");

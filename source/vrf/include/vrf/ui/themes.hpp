@@ -69,10 +69,8 @@ namespace vrf::ui
             ImGuiStyle& style = ImGui::GetStyle();
             ImVec4*     c     = style.Colors;
 
-            const auto scaled = [](const ImVec4& v, const float f) {
-                return ImVec4 {v.x * f, v.y * f, v.z * f, v.w};
-            };
-            const auto alpha = [](const ImVec4& v, const float a) { return ImVec4 {v.x, v.y, v.z, a}; };
+            const auto scaled = [](const ImVec4& v, const float f) { return ImVec4 {v.x * f, v.y * f, v.z * f, v.w}; };
+            const auto alpha  = [](const ImVec4& v, const float a) { return ImVec4 {v.x, v.y, v.z, a}; };
 
             c[ImGuiCol_Text]         = p.text;
             c[ImGuiCol_TextDisabled] = alpha(p.text, 0.45f);
@@ -116,16 +114,16 @@ namespace vrf::ui
             c[ImGuiCol_ResizeGripHovered] = alpha(p.accent, 0.6f);
             c[ImGuiCol_ResizeGripActive]  = p.accent;
 
-            c[ImGuiCol_Tab]                = p.fieldBg;
-            c[ImGuiCol_TabHovered]         = p.hover;
-            c[ImGuiCol_TabSelected]        = p.windowBg;
-            c[ImGuiCol_TabDimmed]          = alpha(p.fieldBg, 0.9f);
-            c[ImGuiCol_TabDimmedSelected]  = p.childBg;
-            c[ImGuiCol_DockingPreview]     = alpha(p.accent, 0.6f);
-            c[ImGuiCol_DockingEmptyBg]     = scaled(p.fieldBg, 0.8f);
-            c[ImGuiCol_TextSelectedBg]     = alpha(p.accent, 0.4f);
-            c[ImGuiCol_NavCursor]          = p.accent;
-            c[ImGuiCol_DragDropTarget]     = alpha(p.accent, 0.9f);
+            c[ImGuiCol_Tab]               = p.fieldBg;
+            c[ImGuiCol_TabHovered]        = p.hover;
+            c[ImGuiCol_TabSelected]       = p.windowBg;
+            c[ImGuiCol_TabDimmed]         = alpha(p.fieldBg, 0.9f);
+            c[ImGuiCol_TabDimmedSelected] = p.childBg;
+            c[ImGuiCol_DockingPreview]    = alpha(p.accent, 0.6f);
+            c[ImGuiCol_DockingEmptyBg]    = scaled(p.fieldBg, 0.8f);
+            c[ImGuiCol_TextSelectedBg]    = alpha(p.accent, 0.4f);
+            c[ImGuiCol_NavCursor]         = p.accent;
+            c[ImGuiCol_DragDropTarget]    = alpha(p.accent, 0.9f);
 
             style.WindowRounding    = 0.0f;
             style.ChildRounding     = p.rounding;

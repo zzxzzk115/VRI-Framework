@@ -53,8 +53,8 @@ namespace vrf
         if (m_device->Swap().GetSwapChainExtent != nullptr)
         {
             uint32_t width = 0, height = 0;
-            if (m_device->Swap().GetSwapChainExtent(m_swapchain, &width, &height) == VriResult_Success &&
-                width != 0 && height != 0)
+            if (m_device->Swap().GetSwapChainExtent(m_swapchain, &width, &height) == VriResult_Success && width != 0 &&
+                height != 0)
             {
                 m_extent = {width, height};
             }
