@@ -78,10 +78,10 @@ namespace vrf
         // requested one); falls back to `requested` on backends without GetSwapChainExtent.
         void AdoptActualExtent(Extent2D requested);
 
-        RenderDevice*            m_device    = nullptr;
-        VriSwapChain*            m_swapchain = nullptr;
-        VriFormat                m_format    = VriFormat_Unknown;
-        Extent2D                 m_extent {};
+        RenderDevice* m_device    = nullptr;
+        VriSwapChain* m_swapchain = nullptr;
+        VriFormat     m_format    = VriFormat_Unknown;
+        Extent2D      m_extent {};
         // The desc this swapchain was built from, kept so SetPresentMode can rebuild with
         // everything else (window, format, texture count) unchanged.
         SwapchainDesc            m_desc {};
