@@ -33,6 +33,7 @@
 #include "vrf/gpu/upload.hpp"
 #include "vrf/gpu/vertex_layout.hpp"
 
+#include "vrf/asset/asset_cache.hpp"
 #include "vrf/asset/gaussian_splat.hpp"
 #include "vrf/asset/light.hpp"
 #include "vrf/asset/loaders/gaussian_splat_loader.hpp"

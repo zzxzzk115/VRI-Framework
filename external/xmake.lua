@@ -41,8 +41,9 @@ add_requires("stb")
 add_requires("tinyobjloader")
 add_requires("tinygltf")
 
--- KTX2 loader (opt-in): libktx pulls a heavier CMake/astc-encoder/zstd chain.
-if has_config("vrf_loader_ktx2") then
+-- libktx (opt-in): pulls a heavier CMake/astc-encoder/zstd chain. Shared by the KTX2
+-- texture loader and the asset cache's BC7 bake, which uses its UASTC encoder.
+if has_config("vrf_loader_ktx2") or has_config("vrf_bake_bc7") then
     add_requires("ktx", {configs = {ktx1 = true, ktx2 = true, shared = false}})
 end
 

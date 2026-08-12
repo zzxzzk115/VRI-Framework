@@ -55,4 +55,9 @@ namespace vrf
         // Recompute boundsMin/Max from positions (no-op if there are none).
         void ComputeBounds();
     };
+
+    // Per-vertex tangents (xyz + handedness in w) from positions/uvs/normals, Lengyel's method.
+    // UploadMesh calls this when a mesh has normals + uvs but no TANGENT; the bake cache calls it
+    // once offline so the cached mesh arrives with tangents already populated.
+    [[nodiscard]] std::vector<Tangent> GenerateTangents(const Mesh& mesh);
 } // namespace vrf
