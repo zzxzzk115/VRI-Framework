@@ -56,12 +56,20 @@ namespace vrf
         // extent on a failed rebuild wedged apps in a black-screen acquire-outOfDate loop:
         // the sizes looked equal, so nothing ever retried.)
         bool Resize(Extent2D extent);
+        // Switch the present mode (Fifo = vsync, Immediate/Mailbox = uncapped). No backend can
+        // retune a live swapchain, so this REBUILDS it: idle the device first, and rebuild
+        // anything holding the old textures (borrowed framegraph textures) afterwards, exactly
+        // as for a Resize. Returns false if the rebuild failed, in which case the previous
+        // swapchain stays usable and the mode is unchanged. A no-op (and true) if `mode` is
+        // already active.
+        bool SetPresentMode(VriPresentMode mode);
 
-        [[nodiscard]] VriTexture*   Texture(uint32_t index) const;
-        [[nodiscard]] uint32_t      TextureCount() const noexcept { return static_cast<uint32_t>(m_textures.size()); }
-        [[nodiscard]] VriFormat     Format() const noexcept { return m_format; }
-        [[nodiscard]] Extent2D      Extent() const noexcept { return m_extent; }
-        [[nodiscard]] VriSwapChain* Handle() const noexcept { return m_swapchain; }
+        [[nodiscard]] VriTexture*    Texture(uint32_t index) const;
+        [[nodiscard]] uint32_t       TextureCount() const noexcept { return static_cast<uint32_t>(m_textures.size()); }
+        [[nodiscard]] VriFormat      Format() const noexcept { return m_format; }
+        [[nodiscard]] Extent2D       Extent() const noexcept { return m_extent; }
+        [[nodiscard]] VriPresentMode PresentMode() const noexcept { return m_desc.presentMode; }
+        [[nodiscard]] VriSwapChain*  Handle() const noexcept { return m_swapchain; }
 
     private:
         void Reset() noexcept;
@@ -74,6 +82,9 @@ namespace vrf
         VriSwapChain*            m_swapchain = nullptr;
         VriFormat                m_format    = VriFormat_Unknown;
         Extent2D                 m_extent {};
+        // The desc this swapchain was built from, kept so SetPresentMode can rebuild with
+        // everything else (window, format, texture count) unchanged.
+        SwapchainDesc            m_desc {};
         std::vector<VriTexture*> m_textures;
     };
 } // namespace vrf
