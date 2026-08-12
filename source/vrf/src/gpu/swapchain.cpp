@@ -8,7 +8,8 @@ namespace vrf
 {
     Swapchain::Swapchain(Swapchain&& other) noexcept :
         m_device(std::exchange(other.m_device, nullptr)), m_swapchain(std::exchange(other.m_swapchain, nullptr)),
-        m_format(other.m_format), m_extent(other.m_extent), m_textures(std::move(other.m_textures))
+        m_format(other.m_format), m_extent(other.m_extent), m_desc(other.m_desc),
+        m_textures(std::move(other.m_textures))
     {}
 
     Swapchain& Swapchain::operator=(Swapchain&& other) noexcept
@@ -20,6 +21,7 @@ namespace vrf
             m_swapchain = std::exchange(other.m_swapchain, nullptr);
             m_format    = other.m_format;
             m_extent    = other.m_extent;
+            m_desc      = other.m_desc;
             m_textures  = std::move(other.m_textures);
         }
         return *this;
@@ -81,6 +83,7 @@ namespace vrf
         swapchain.m_device    = &device;
         swapchain.m_swapchain = handle;
         swapchain.m_format    = desc.format;
+        swapchain.m_desc      = desc;
         swapchain.AdoptActualExtent(desc.extent);
         swapchain.RefreshTextures();
         return swapchain;
@@ -108,7 +111,47 @@ namespace vrf
             return false;
         AdoptActualExtent(extent);
         RefreshTextures();
+        m_desc.extent = m_extent;
         return true;
+    }
+
+    bool Swapchain::SetPresentMode(VriPresentMode mode)
+    {
+        if (mode == m_desc.presentMode)
+            return true;
+
+        // There is no backend call to retune an existing swapchain's present mode, so this
+        // rebuilds. The caller must have idled the device first: the old swapchain's textures
+        // are destroyed here, and anything still holding them (borrowed framegraph textures,
+        // in-flight command buffers) has to be rebuilt afterwards - same contract as Resize.
+        //
+        // The old swapchain must be destroyed BEFORE creating the replacement: a surface can
+        // only back one live swapchain, so creating first (to keep a working one around on
+        // failure) fails unconditionally with VriResult_Unsupported. That means the failure
+        // path has to rebuild at the previous mode instead of simply bailing out.
+        const SwapchainDesc previous = m_desc;
+
+        SwapchainDesc desc = m_desc;
+        desc.presentMode   = mode;
+        desc.extent        = m_extent;
+
+        RenderDevice& device = *m_device;
+        Reset();
+
+        if (auto rebuilt = Create(device, desc))
+        {
+            *this = std::move(*rebuilt);
+            return true;
+        }
+
+        // `mode` is unsupported on this surface. Restore the mode that was working so the app
+        // keeps presenting; if even that fails there is no usable swapchain and the caller's
+        // resize/retry path takes over on the next frame.
+        SwapchainDesc restore = previous;
+        restore.extent        = desc.extent;
+        if (auto back = Create(device, restore))
+            *this = std::move(*back);
+        return false;
     }
 
     VriTexture* Swapchain::Texture(uint32_t index) const
