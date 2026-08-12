@@ -68,6 +68,35 @@ namespace vrf::ui
             }
         }
 
+        // Display order must follow THIS frame's record order, not the order entries were first
+        // seen. m_entries is append-only so the averages survive, but a zone that starts running
+        // later - a pass behind a runtime toggle - would otherwise be appended after every zone
+        // already known, including the outermost ones recorded at the end of the frame. It then
+        // renders below them while still indented to its own depth, so it reads as a child of
+        // whatever precedes it. Rebuilding the order each frame keeps the tree honest.
+        m_order.clear();
+        m_order.reserve(m_entries.size());
+        for (const auto& zone : zones)
+        {
+            for (uint32_t i = 0; i < static_cast<uint32_t>(m_entries.size()); ++i)
+            {
+                if (m_entries[i].depth != zone.depth || m_entries[i].name != zone.name)
+                    continue;
+                // A name recorded twice in one frame is aggregated into a single row, so only
+                // its first occurrence contributes a position.
+                if (std::find(m_order.begin(), m_order.end(), i) == m_order.end())
+                    m_order.push_back(i);
+                break;
+            }
+        }
+        // Zones absent this frame keep a row at the end while their averages decay, so a pass
+        // that just stopped running is visibly winding down rather than vanishing instantly.
+        for (uint32_t i = 0; i < static_cast<uint32_t>(m_entries.size()); ++i)
+        {
+            if (m_entries[i].occurrences == 0 && std::find(m_order.begin(), m_order.end(), i) == m_order.end())
+                m_order.push_back(i);
+        }
+
         m_totalInstantMs = profiler.LastFrameMs();
         m_totalAverageMs = m_totalAverageMs + alpha * (m_totalInstantMs - m_totalAverageMs);
 
@@ -84,6 +113,7 @@ namespace vrf::ui
     void ProfilerPanel::Reset() noexcept
     {
         m_entries.clear();
+        m_order.clear();
         m_totalInstantMs = 0.0;
         m_totalAverageMs = 0.0;
         m_observedZones  = 0;
@@ -147,8 +177,9 @@ namespace vrf::ui
             ImGui::TableSetupColumn("%");
         ImGui::TableHeadersRow();
 
-        for (const Entry& entry : m_entries)
+        for (const uint32_t index : m_order)
         {
+            const Entry& entry = m_entries[index];
             if (entry.averageMs < options.minVisibleMs && entry.occurrences == 0)
                 continue;
 

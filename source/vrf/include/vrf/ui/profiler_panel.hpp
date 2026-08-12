@@ -97,10 +97,14 @@ namespace vrf::ui
     private:
         Entry& FindOrAdd(const std::string& name, uint32_t depth);
 
-        std::vector<Entry> m_entries;
-        double             m_totalInstantMs {0.0};
-        double             m_totalAverageMs {0.0};
-        uint32_t           m_observedZones {0};
-        uint32_t           m_peakZones {0};
+        std::vector<Entry> m_entries; // append-only, so averages survive a zone disappearing
+        // Indices into m_entries in this frame's record order. Rebuilt every Update, because
+        // insertion order puts a late-appearing zone after everything already seen - including
+        // the outermost zones - which makes it render as a child of the wrong parent.
+        std::vector<uint32_t> m_order;
+        double                m_totalInstantMs {0.0};
+        double                m_totalAverageMs {0.0};
+        uint32_t              m_observedZones {0};
+        uint32_t              m_peakZones {0};
     };
 } // namespace vrf::ui
