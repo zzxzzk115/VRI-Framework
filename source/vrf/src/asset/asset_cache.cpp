@@ -4,8 +4,8 @@
 #include <atomic>
 #include <cstring>
 #include <filesystem>
-#include <numeric>
 #include <fstream>
+#include <numeric>
 #include <system_error>
 #include <thread>
 #include <vector>
@@ -21,8 +21,8 @@ namespace vrf
 {
     namespace
     {
-        constexpr char     kMagic[8]       = {'V', 'R', 'F', 'B', 'A', 'K', 'E', '\0'};
-        constexpr uint32_t kFormatVersion  = 1;
+        constexpr char     kMagic[8]      = {'V', 'R', 'F', 'B', 'A', 'K', 'E', '\0'};
+        constexpr uint32_t kFormatVersion = 1;
         // Bump when a loader changes what it produces from unchanged source bytes (transform
         // baking, attribute union, mip filter, ...). Existing caches then miss and re-bake
         // instead of feeding stale geometry into a changed pipeline.
@@ -98,9 +98,14 @@ namespace vrf
                 if (fileEc)
                     entry = p.filename().generic_string();
                 entry += '|';
-                entry += std::to_string(size);
+                // Both casts are load-bearing, not tidying targets: libc++'s
+                // file_clock uses a __int128 duration rep, for which std::to_string is
+                // ambiguous (it has no __int128 overload and several viable
+                // conversions). File sizes and nanosecond timestamps fit in 64 bits
+                // with room to spare, so narrowing here is safe.
+                entry += std::to_string(static_cast<unsigned long long>(size));
                 entry += '|';
-                entry += std::to_string(time.time_since_epoch().count());
+                entry += std::to_string(static_cast<long long>(time.time_since_epoch().count()));
                 entries.push_back(std::move(entry));
             }
 
@@ -129,7 +134,10 @@ namespace vrf
         public:
             explicit Writer(std::ostream& out) : m_Out {out} {}
 
-            void Raw(const void* data, size_t size) { m_Out.write(static_cast<const char*>(data), std::streamsize(size)); }
+            void Raw(const void* data, size_t size)
+            {
+                m_Out.write(static_cast<const char*>(data), std::streamsize(size));
+            }
 
             template<class T>
             void Pod(const T& value)
@@ -495,7 +503,7 @@ namespace vrf
         bool ReadTexture(Reader& r, Texture& t)
         {
             uint8_t isCubemap = 0, fileFormat = 0, compressed = 0;
-            int32_t format    = 0;
+            int32_t format = 0;
             if (!r.Str(t.name) || !r.Pod(t.width) || !r.Pod(t.height) || !r.Pod(t.depth) || !r.Pod(t.mipLevels) ||
                 !r.Pod(t.arrayLayers) || !r.Pod(isCubemap) || !r.Pod(format) || !r.Pod(fileFormat) ||
                 !r.Pod(compressed) || !r.Array(t.subresources) || !r.Array(t.data))
@@ -645,16 +653,16 @@ namespace vrf
             if (mesh.textures.empty())
                 return;
 
-            const uint64_t before  = std::accumulate(
-                mesh.textures.begin(), mesh.textures.end(), uint64_t {0}, [](uint64_t sum, const Texture& t) {
-                    return sum + t.SizeBytes();
-                });
+            const uint64_t      before = std::accumulate(mesh.textures.begin(),
+                                                    mesh.textures.end(),
+                                                    uint64_t {0},
+                                                    [](uint64_t sum, const Texture& t) { return sum + t.SizeBytes(); });
             std::atomic<size_t> next {0};
             std::atomic<size_t> converted {0};
 
-            const unsigned workers =
-                std::max(1u, std::min<unsigned>(std::thread::hardware_concurrency(),
-                                                static_cast<unsigned>(mesh.textures.size())));
+            const unsigned workers = std::max(
+                1u,
+                std::min<unsigned>(std::thread::hardware_concurrency(), static_cast<unsigned>(mesh.textures.size())));
             std::vector<std::thread> pool;
             pool.reserve(workers);
             for (unsigned w = 0; w < workers; ++w)
@@ -668,10 +676,10 @@ namespace vrf
             for (std::thread& t : pool)
                 t.join();
 
-            const uint64_t after = std::accumulate(
-                mesh.textures.begin(), mesh.textures.end(), uint64_t {0}, [](uint64_t sum, const Texture& t) {
-                    return sum + t.SizeBytes();
-                });
+            const uint64_t after = std::accumulate(mesh.textures.begin(),
+                                                   mesh.textures.end(),
+                                                   uint64_t {0},
+                                                   [](uint64_t sum, const Texture& t) { return sum + t.SizeBytes(); });
             LogInfo("asset cache: BC7 compressed {}/{} textures, {} MB -> {} MB",
                     converted.load(),
                     mesh.textures.size(),
@@ -843,8 +851,7 @@ namespace vrf
         if (!cache.enabled)
             return loadSource();
 
-        const std::string cachePath =
-            cache.cachePath.empty() ? std::string(path) + ".vrfcache" : cache.cachePath;
+        const std::string cachePath = cache.cachePath.empty() ? std::string(path) + ".vrfcache" : cache.cachePath;
 
         if (auto hit = ReadBakedMesh(cachePath, path, out); hit)
         {

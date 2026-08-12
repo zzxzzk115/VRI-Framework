@@ -44,18 +44,15 @@ namespace vrf
     // Miss -> LoadGltf/LoadObj as usual, then (if `write`) bakes the result for next time.
     //
     // A bake failure is not a load failure: `out` is still valid and the error is logged.
-    [[nodiscard]] Expected<void> LoadModelCached(std::string_view          path,
-                                                 Mesh&                     out,
-                                                 const GltfImportOptions&  options = {},
-                                                 const AssetCacheOptions&  cache   = {});
+    [[nodiscard]] Expected<void> LoadModelCached(std::string_view         path,
+                                                 Mesh&                    out,
+                                                 const GltfImportOptions& options = {},
+                                                 const AssetCacheOptions& cache   = {});
 
     // Lower-level halves, exposed for tests and for tools that bake ahead of time.
-    [[nodiscard]] Expected<void> WriteBakedMesh(std::string_view cachePath,
-                                                std::string_view sourcePath,
-                                                const Mesh&      mesh);
+    [[nodiscard]] Expected<void>
+    WriteBakedMesh(std::string_view cachePath, std::string_view sourcePath, const Mesh& mesh);
     // Fails (rather than returning stale data) when the header, the format/loader version or
     // the recorded source stamp does not match what is on disk now.
-    [[nodiscard]] Expected<void> ReadBakedMesh(std::string_view cachePath,
-                                               std::string_view sourcePath,
-                                               Mesh&            out);
+    [[nodiscard]] Expected<void> ReadBakedMesh(std::string_view cachePath, std::string_view sourcePath, Mesh& out);
 } // namespace vrf
