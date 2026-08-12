@@ -33,7 +33,7 @@ namespace vrf::fg
         TessEvalShader    = 1u << 7,
         // For a buffer read as draw/dispatch arguments by CmdDraw*Indirect /
         // CmdDispatchIndirect - the consumer is the command processor, not a shader.
-        DrawIndirect      = 1u << 8,
+        DrawIndirect = 1u << 8,
     };
     [[nodiscard]] constexpr PipelineStage operator|(PipelineStage a, PipelineStage b)
     {

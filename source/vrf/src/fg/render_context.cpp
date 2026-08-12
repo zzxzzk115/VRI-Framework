@@ -134,13 +134,13 @@ namespace vrf::fg
         if (m_active >= m_pools.size())
         {
             const VriDescriptorPoolDesc poolDesc {
-                .descriptorSetMaxNum         = 512,
-                .samplerMaxNum               = 512,
-                .textureMaxNum               = 2048,
-                .storageTextureMaxNum        = 1024,
-                .constantBufferMaxNum        = 512,
-                .structuredBufferMaxNum      = 512,
-                .storageBufferMaxNum         = 1024,
+                .descriptorSetMaxNum    = 512,
+                .samplerMaxNum          = 512,
+                .textureMaxNum          = 2048,
+                .storageTextureMaxNum   = 1024,
+                .constantBufferMaxNum   = 512,
+                .structuredBufferMaxNum = 512,
+                .storageBufferMaxNum    = 1024,
                 // Ray query alone (no RT pipeline) still binds AS descriptors.
                 .accelerationStructureMaxNum =
                     (m_device->Desc()->hasRayTracing || m_device->Desc()->hasRayQuery) ? 64u : 0u,
