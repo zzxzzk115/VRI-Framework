@@ -34,6 +34,15 @@ option("vrf_loader_ktx2")
     set_description("Enable the KTX2 texture loader (libktx)")
 option_end()
 
+-- Block-compress baked textures (asset_cache). Uses libktx's UASTC encoder, transcoded to
+-- BC7 at bake time so runtime stays a plain read. Same libktx dependency as the KTX2 loader;
+-- without it the bake still works, storing textures uncompressed (~4x the disk).
+option("vrf_bake_bc7")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Block-compress baked cache textures to BC7 (libktx UASTC encoder)")
+option_end()
+
 -- Optional Dear ImGui integration (Application onGui + RenderModule draw, via VRI's imgui
 -- extension and the SDL3/GLFW platform backends for input).
 option("vrf_with_imgui")

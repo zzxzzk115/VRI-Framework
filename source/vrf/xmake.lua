@@ -33,6 +33,15 @@ target("vrf")
     -- KTX2 loader (opt-in) via libktx.
     if has_config("vrf_loader_ktx2") then
         add_defines("VRF_ENABLE_KTX2")
+    end
+
+    -- Asset-cache BC7 bake (opt-in): libktx's UASTC encoder + BC7 transcoder, run offline.
+    if has_config("vrf_bake_bc7") then
+        add_defines("VRF_ENABLE_BAKE_BC7")
+    end
+
+    -- Both of the above are libktx.
+    if has_config("vrf_loader_ktx2") or has_config("vrf_bake_bc7") then
         add_packages("ktx")
     end
 
