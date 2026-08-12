@@ -10,6 +10,9 @@
 
 #include "vrf/platform/window.hpp"
 
+#include "vrf/research/image_metrics.hpp"
+#include "vrf/ui/profiler_panel.hpp"
+
 #include "vrf/gpu/builders/buffer_builder.hpp"
 #include "vrf/gpu/builders/compute_pipeline_builder.hpp"
 #include "vrf/gpu/builders/graphics_pipeline_builder.hpp"
