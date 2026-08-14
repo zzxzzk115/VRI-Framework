@@ -22,6 +22,9 @@ namespace vrf::fg
                     return VriBufferUsage_VertexBuffer | VriBufferUsage_StorageBuffer | VriBufferUsage_TransferDst;
                 case BufferType::IndexBuffer:
                     return VriBufferUsage_IndexBuffer | VriBufferUsage_StorageBuffer | VriBufferUsage_TransferDst;
+                case BufferType::IndirectBuffer:
+                    return VriBufferUsage_StorageBuffer | VriBufferUsage_IndirectBuffer | VriBufferUsage_TransferSrc |
+                           VriBufferUsage_TransferDst;
             }
             return VriBufferUsage_None;
         }
@@ -69,10 +72,13 @@ namespace vrf::fg
         assert(desc.dataSize() > 0);
 
         const VriBufferDesc bd {
-            .size            = desc.dataSize(),
-            .structureStride = desc.type == BufferType::StorageBuffer ? desc.stride : 0,
-            .usage           = usageFor(desc.type),
-            .memoryLocation  = locationFor(desc.type),
+            .size = desc.dataSize(),
+            // IndirectBuffer is a storage buffer that also carries launch arguments, so it needs
+            // the structure stride too - a structured-buffer view without one is not addressable.
+            .structureStride =
+                (desc.type == BufferType::StorageBuffer || desc.type == BufferType::IndirectBuffer) ? desc.stride : 0,
+            .usage          = usageFor(desc.type),
+            .memoryLocation = locationFor(desc.type),
         };
 
         VriBuffer* buffer = nullptr;
