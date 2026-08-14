@@ -27,6 +27,12 @@ namespace vrf::fg
         StorageBuffer,
         VertexBuffer,
         IndexBuffer,
+        // Storage buffer that may also be the source of CmdDispatchIndirect / CmdDrawIndirect
+        // arguments. Separate from StorageBuffer because IndirectBuffer usage is not free on every
+        // backend, so a plain compute buffer should not pay for it: this is for the GPU-driven
+        // pattern where a compute pass computes its own successor's launch size and the CPU never
+        // sees the count.
+        IndirectBuffer,
     };
 
     class Buffer
