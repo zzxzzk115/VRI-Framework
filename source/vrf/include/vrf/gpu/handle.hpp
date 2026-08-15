@@ -18,6 +18,7 @@
 #include <vri/vri.h>
 
 #include "vrf/gpu/render_device.hpp"
+#include "vrf/gpu/rhi.hpp"
 
 namespace vrf
 {
@@ -26,34 +27,34 @@ namespace vrf
     struct VriResourceTraits;
 
     template<>
-    struct VriResourceTraits<VriBuffer>
+    struct VriResourceTraits<rhi::Buffer>
     {
-        static void Destroy(RenderDevice& d, VriBuffer* h) noexcept { d.Core().DestroyBuffer(h); }
+        static void Destroy(RenderDevice& d, rhi::Buffer* h) noexcept { d.Core().DestroyBuffer(h); }
     };
     template<>
-    struct VriResourceTraits<VriTexture>
+    struct VriResourceTraits<rhi::Texture>
     {
-        static void Destroy(RenderDevice& d, VriTexture* h) noexcept { d.Core().DestroyTexture(h); }
+        static void Destroy(RenderDevice& d, rhi::Texture* h) noexcept { d.Core().DestroyTexture(h); }
     };
     template<>
-    struct VriResourceTraits<VriDescriptor>
+    struct VriResourceTraits<rhi::Descriptor>
     {
-        static void Destroy(RenderDevice& d, VriDescriptor* h) noexcept { d.Core().DestroyDescriptor(h); }
+        static void Destroy(RenderDevice& d, rhi::Descriptor* h) noexcept { d.Core().DestroyDescriptor(h); }
     };
     template<>
-    struct VriResourceTraits<VriPipeline>
+    struct VriResourceTraits<rhi::Pipeline>
     {
-        static void Destroy(RenderDevice& d, VriPipeline* h) noexcept { d.Core().DestroyPipeline(h); }
+        static void Destroy(RenderDevice& d, rhi::Pipeline* h) noexcept { d.Core().DestroyPipeline(h); }
     };
     template<>
-    struct VriResourceTraits<VriPipelineLayout>
+    struct VriResourceTraits<rhi::PipelineLayout>
     {
-        static void Destroy(RenderDevice& d, VriPipelineLayout* h) noexcept { d.Core().DestroyPipelineLayout(h); }
+        static void Destroy(RenderDevice& d, rhi::PipelineLayout* h) noexcept { d.Core().DestroyPipelineLayout(h); }
     };
     template<>
-    struct VriResourceTraits<VriDescriptorPool>
+    struct VriResourceTraits<rhi::DescriptorPool>
     {
-        static void Destroy(RenderDevice& d, VriDescriptorPool* h) noexcept { d.Core().DestroyDescriptorPool(h); }
+        static void Destroy(RenderDevice& d, rhi::DescriptorPool* h) noexcept { d.Core().DestroyDescriptorPool(h); }
     };
 
     template<class T>
@@ -104,10 +105,10 @@ namespace vrf
         T*            m_handle {nullptr};
     };
 
-    using UniqueBuffer         = Unique<VriBuffer>;
-    using UniqueTexture        = Unique<VriTexture>;
-    using UniqueDescriptor     = Unique<VriDescriptor>; // views + samplers
-    using UniquePipeline       = Unique<VriPipeline>;
-    using UniquePipelineLayout = Unique<VriPipelineLayout>;
-    using UniqueDescriptorPool = Unique<VriDescriptorPool>;
+    using UniqueBuffer         = Unique<rhi::Buffer>;
+    using UniqueTexture        = Unique<rhi::Texture>;
+    using UniqueDescriptor     = Unique<rhi::Descriptor>; // views + samplers
+    using UniquePipeline       = Unique<rhi::Pipeline>;
+    using UniquePipelineLayout = Unique<rhi::PipelineLayout>;
+    using UniqueDescriptorPool = Unique<rhi::DescriptorPool>;
 } // namespace vrf
