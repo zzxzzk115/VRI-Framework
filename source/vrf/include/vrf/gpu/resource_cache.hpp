@@ -7,10 +7,12 @@
  * value, which would let a hash collision silently return the wrong resource - and it owns the
  * handles as vrf::Unique<T>, so Clear()/destruction free them with no hand-written loop.
  *
- *   ResourceCache<SamplerKey, VriDescriptor> cache {device};
- *   VriDescriptor* s = cache.GetOrCreate(key, [&]() -> Expected<VriDescriptor*> { ...create... });
+ *   ResourceCache<SamplerKey, DescriptorHandle> cache {device};
+ *   DescriptorHandle* s = cache.GetOrCreate(key, [&]() -> Expected<DescriptorHandle*> { ...create... });
  */
 #pragma once
+
+#include "vrf/gpu/vri_types.hpp"
 
 #include <cstddef>
 #include <unordered_map>

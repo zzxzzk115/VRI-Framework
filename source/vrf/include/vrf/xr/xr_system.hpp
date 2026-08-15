@@ -3,7 +3,7 @@
  *
  * XR_KHR_vulkan_enable2 requires the XR runtime to interpose Vulkan
  * instance/device creation and to pick the VkPhysicalDevice, so XR
- * compatibility is decided when the VriDevice is created and cannot be
+ * compatibility is decided when the DeviceHandle is created and cannot be
  * retrofitted. The intended startup flow for a runtime-toggleable VR app:
  *
  *   auto xrSystem = vrf::xr::XrSystem::Probe();          // cheap; fails cleanly with no runtime/HMD
@@ -15,6 +15,8 @@
  * Only available with vrf_with_openxr (VRF_WITH_OPENXR).
  */
 #pragma once
+
+#include "vrf/gpu/vri_types.hpp"
 
 #if defined(VRF_WITH_OPENXR)
 

@@ -1,8 +1,9 @@
 /*
  * handle.hpp - move-only RAII ownership for raw VRI resource handles.
  *
- * VRI hands back raw pointers (VriBuffer, VriTexture, VriPipeline, ...) that the owner must
- * Destroy() by hand - the one lifetime model in vrf that is not RAII (builder outputs, GpuMesh,
+ * VRI hands back raw pointers (vrf::BufferHandle, vrf::TextureHandle, ... - the VriBuffer/VriTexture
+ * handle aliases from gpu/vri_types.hpp) that the owner must Destroy() by hand - the one lifetime
+ * model in vrf that is not RAII (builder outputs, GpuMesh,
  * GpuTexture). Unique<T> wraps such a handle with the matching core-interface destroy call, so
  * ownership is uniform: it frees on scope exit, moves transfer it, and it converts implicitly to
  * the raw T* for passing straight into VRI calls.
@@ -15,6 +16,7 @@
 
 #include <utility>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/gpu/render_device.hpp"
@@ -26,34 +28,34 @@ namespace vrf
     struct VriResourceTraits;
 
     template<>
-    struct VriResourceTraits<VriBuffer>
+    struct VriResourceTraits<BufferHandle>
     {
-        static void Destroy(RenderDevice& d, VriBuffer* h) noexcept { d.Core().DestroyBuffer(h); }
+        static void Destroy(RenderDevice& d, BufferHandle* h) noexcept { d.Core().DestroyBuffer(h); }
     };
     template<>
-    struct VriResourceTraits<VriTexture>
+    struct VriResourceTraits<TextureHandle>
     {
-        static void Destroy(RenderDevice& d, VriTexture* h) noexcept { d.Core().DestroyTexture(h); }
+        static void Destroy(RenderDevice& d, TextureHandle* h) noexcept { d.Core().DestroyTexture(h); }
     };
     template<>
-    struct VriResourceTraits<VriDescriptor>
+    struct VriResourceTraits<DescriptorHandle>
     {
-        static void Destroy(RenderDevice& d, VriDescriptor* h) noexcept { d.Core().DestroyDescriptor(h); }
+        static void Destroy(RenderDevice& d, DescriptorHandle* h) noexcept { d.Core().DestroyDescriptor(h); }
     };
     template<>
-    struct VriResourceTraits<VriPipeline>
+    struct VriResourceTraits<PipelineHandle>
     {
-        static void Destroy(RenderDevice& d, VriPipeline* h) noexcept { d.Core().DestroyPipeline(h); }
+        static void Destroy(RenderDevice& d, PipelineHandle* h) noexcept { d.Core().DestroyPipeline(h); }
     };
     template<>
-    struct VriResourceTraits<VriPipelineLayout>
+    struct VriResourceTraits<PipelineLayoutHandle>
     {
-        static void Destroy(RenderDevice& d, VriPipelineLayout* h) noexcept { d.Core().DestroyPipelineLayout(h); }
+        static void Destroy(RenderDevice& d, PipelineLayoutHandle* h) noexcept { d.Core().DestroyPipelineLayout(h); }
     };
     template<>
-    struct VriResourceTraits<VriDescriptorPool>
+    struct VriResourceTraits<DescriptorPoolHandle>
     {
-        static void Destroy(RenderDevice& d, VriDescriptorPool* h) noexcept { d.Core().DestroyDescriptorPool(h); }
+        static void Destroy(RenderDevice& d, DescriptorPoolHandle* h) noexcept { d.Core().DestroyDescriptorPool(h); }
     };
 
     template<class T>
@@ -104,10 +106,10 @@ namespace vrf
         T*            m_handle {nullptr};
     };
 
-    using UniqueBuffer         = Unique<VriBuffer>;
-    using UniqueTexture        = Unique<VriTexture>;
-    using UniqueDescriptor     = Unique<VriDescriptor>; // views + samplers
-    using UniquePipeline       = Unique<VriPipeline>;
-    using UniquePipelineLayout = Unique<VriPipelineLayout>;
-    using UniqueDescriptorPool = Unique<VriDescriptorPool>;
+    using UniqueBuffer         = Unique<BufferHandle>;
+    using UniqueTexture        = Unique<TextureHandle>;
+    using UniqueDescriptor     = Unique<DescriptorHandle>; // views + samplers
+    using UniquePipeline       = Unique<PipelineHandle>;
+    using UniquePipelineLayout = Unique<PipelineLayoutHandle>;
+    using UniqueDescriptorPool = Unique<DescriptorPoolHandle>;
 } // namespace vrf

@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/math.hpp"
@@ -75,8 +76,8 @@ namespace vrf
         void draw(fg::RenderContext&, Extent2D targetExtent, VriFormat colorFormat, const Batch& batch);
 
     private:
-        void                       reset() noexcept;
-        [[nodiscard]] VriPipeline* pipelineFor(VriFormat colorFormat);
+        void                          reset() noexcept;
+        [[nodiscard]] PipelineHandle* pipelineFor(VriFormat colorFormat);
 
         struct Vertex
         {
@@ -85,21 +86,21 @@ namespace vrf
         };
 
         RenderDevice*         m_device {nullptr};
-        VriPipelineLayout*    m_layout {nullptr};
+        PipelineLayoutHandle* m_layout {nullptr};
         std::vector<uint32_t> m_vsSpirv, m_fsSpirv; // owned copies (caller's may not outlive us)
         std::string           m_vsEntry {"main"}, m_fsEntry {"main"};
 
         struct FormatPipeline
         {
-            VriFormat    format;
-            VriPipeline* pipeline;
+            VriFormat       format;
+            PipelineHandle* pipeline;
         };
         std::vector<FormatPipeline> m_pipelines;
 
         std::vector<Vertex> m_vertices;
 
         static constexpr uint32_t kRing = 8; // > batches-per-frame * frames-in-flight
-        VriBuffer*                m_buffers[kRing] {};
+        BufferHandle*             m_buffers[kRing] {};
         size_t                    m_capacities[kRing] {};
         uint32_t                  m_ring {0}; // allocation cursor
     };

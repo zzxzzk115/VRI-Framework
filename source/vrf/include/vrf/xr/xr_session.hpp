@@ -15,6 +15,8 @@
  */
 #pragma once
 
+#include "vrf/gpu/vri_types.hpp"
+
 #if defined(VRF_WITH_OPENXR)
 
 #include <memory>
@@ -61,7 +63,7 @@ namespace vrf::xr
         [[nodiscard]] static Expected<std::unique_ptr<XrSession>> Create(XrSystem&, RenderDevice&);
 
         [[nodiscard]] Expected<StereoFrame> BeginFrame() override;
-        void                                PreSubmit(VriCommandBuffer*, StereoFrame&) override;
+        void                                PreSubmit(CommandBufferHandle*, StereoFrame&) override;
         void                                EndFrame(const StereoFrame&) override;
 
         [[nodiscard]] Extent2D  EyeExtent() const override;

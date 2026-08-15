@@ -1,5 +1,5 @@
 /*
- * render_device.hpp - RAII owner of a VriDevice plus its cached interface tables.
+ * render_device.hpp - RAII owner of a DeviceHandle plus its cached interface tables.
  *
  * This is the fuller C++ layer VRI's own vri.hpp deliberately stubs out: it runs
  * the device bring-up sequence (vriCreateDevice -> vriGetInterface x2 ->
@@ -10,6 +10,7 @@
 
 #include <cstdint>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -51,13 +52,13 @@ namespace vrf
 
         [[nodiscard]] static Expected<RenderDevice> Create(const RenderDeviceDesc& desc);
 
-        [[nodiscard]] VriDevice*                   Handle() const noexcept { return m_device; }
+        [[nodiscard]] DeviceHandle*                Handle() const noexcept { return m_device; }
         [[nodiscard]] const VriCoreInterface&      Core() const noexcept { return m_core; }
         [[nodiscard]] const VriSwapChainInterface& Swap() const noexcept { return m_swap; }
-        [[nodiscard]] VriQueue*                    GraphicsQueue() const noexcept { return m_graphicsQueue; }
+        [[nodiscard]] QueueHandle*                 GraphicsQueue() const noexcept { return m_graphicsQueue; }
         // The queue for a workload type. Falls back to the graphics queue when the backend exposes
         // no dedicated compute/transfer queue (Metal/MoltenVK), so callers can always submit.
-        [[nodiscard]] VriQueue* Queue(VriQueueType type) const noexcept
+        [[nodiscard]] QueueHandle* Queue(QueueType type) const noexcept
         {
             switch (type)
             {
@@ -81,21 +82,21 @@ namespace vrf
         void WaitIdle() const;
 
     private:
-        RenderDevice(VriDevice*                   device,
+        RenderDevice(DeviceHandle*                device,
                      const VriCoreInterface&      core,
                      const VriSwapChainInterface& swap,
-                     VriQueue*                    graphicsQueue,
+                     QueueHandle*                 graphicsQueue,
                      const VriDeviceDesc*         desc,
                      VriGraphicsAPI               api) noexcept;
 
         void Reset() noexcept;
 
-        VriDevice*            m_device        = nullptr;
+        DeviceHandle*         m_device        = nullptr;
         VriCoreInterface      m_core          = {};
         VriSwapChainInterface m_swap          = {};
-        VriQueue*             m_graphicsQueue = nullptr;
-        VriQueue*             m_computeQueue  = nullptr; // == graphics when no dedicated queue
-        VriQueue*             m_transferQueue = nullptr; // == graphics when no dedicated queue
+        QueueHandle*          m_graphicsQueue = nullptr;
+        QueueHandle*          m_computeQueue  = nullptr; // == graphics when no dedicated queue
+        QueueHandle*          m_transferQueue = nullptr; // == graphics when no dedicated queue
         const VriDeviceDesc*  m_desc          = nullptr;
         VriGraphicsAPI        m_api           = VriGraphicsAPI_None;
     };

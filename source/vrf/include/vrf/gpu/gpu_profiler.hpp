@@ -22,6 +22,7 @@
 #include <string>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/ext/vri_ext_query.h>
 #include <vri/vri.h>
 
@@ -56,10 +57,10 @@ namespace vrf
         [[nodiscard]] bool Enabled() const noexcept { return m_device != nullptr; }
 
         // Reset this slot's pool and resolve the results captured the last time this slot ran.
-        void BeginFrame(VriCommandBuffer* cmd, uint32_t frameIndex);
-        void BeginZone(VriCommandBuffer* cmd, const char* name);
-        void EndZone(VriCommandBuffer* cmd);
-        void EndFrame(VriCommandBuffer* cmd);
+        void BeginFrame(CommandBufferHandle* cmd, uint32_t frameIndex);
+        void BeginZone(CommandBufferHandle* cmd, const char* name);
+        void EndZone(CommandBufferHandle* cmd);
+        void EndFrame(CommandBufferHandle* cmd);
 
         // Spans resolved at the last BeginFrame; stable until the next BeginFrame, in record order.
         [[nodiscard]] const std::vector<Zone>& Results() const noexcept { return m_results; }
@@ -79,7 +80,7 @@ namespace vrf
         struct Slot
         {
             VriQueryPool*       pool {nullptr};
-            VriBuffer*          readback {nullptr};
+            BufferHandle*       readback {nullptr};
             std::vector<Record> records;         // zones recorded into this slot this cycle (CPU side)
             uint32_t            next {0};        // next free query index
             bool                pending {false}; // has unresolved results copied by a prior submit
@@ -98,7 +99,7 @@ namespace vrf
     // RAII scope for a GPU zone (mirrors core/profiling.hpp's CPU VRF_ZONE).
     struct GpuZoneScope
     {
-        GpuZoneScope(GpuProfiler& p, VriCommandBuffer* cmd, const char* name) : profiler {p}, cmd {cmd}
+        GpuZoneScope(GpuProfiler& p, CommandBufferHandle* cmd, const char* name) : profiler {p}, cmd {cmd}
         {
             profiler.BeginZone(cmd, name);
         }
@@ -106,8 +107,8 @@ namespace vrf
         GpuZoneScope(const GpuZoneScope&)            = delete;
         GpuZoneScope& operator=(const GpuZoneScope&) = delete;
 
-        GpuProfiler&      profiler;
-        VriCommandBuffer* cmd;
+        GpuProfiler&         profiler;
+        CommandBufferHandle* cmd;
     };
 } // namespace vrf
 

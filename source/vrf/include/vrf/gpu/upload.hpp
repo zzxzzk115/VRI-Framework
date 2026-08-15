@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/asset/mesh.hpp"
@@ -52,5 +53,5 @@ namespace vrf
     // Record one-shot GPU work into a transient command buffer, submit, and wait. The public
     // form of the internal staging-submit used by UploadMesh/UploadTexture; handy for building
     // acceleration structures or other one-time device work outside a frame loop.
-    void ImmediateSubmit(RenderDevice& device, const std::function<void(VriCommandBuffer*)>& record);
+    void ImmediateSubmit(RenderDevice& device, const std::function<void(CommandBufferHandle*)>& record);
 } // namespace vrf

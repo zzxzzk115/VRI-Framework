@@ -11,6 +11,7 @@
 #include <memory>
 #include <string>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/math.hpp"
@@ -49,7 +50,7 @@ namespace vrf
         [[nodiscard]] static Expected<std::unique_ptr<Application>> Create(const ApplicationDesc& desc);
 
         // Record draw commands inside the render pass (pipeline + draws). Optional.
-        std::function<void(VriCommandBuffer* cmd)> onRecord;
+        std::function<void(CommandBufferHandle* cmd)> onRecord;
 
         // Build the ImGui UI for the frame (between NewFrame and Render). Only called when
         // ApplicationDesc::imgui is set and the framework is built with VRF_WITH_IMGUI.

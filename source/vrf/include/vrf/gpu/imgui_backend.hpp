@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/ext/vri_ext_imgui.h>
 #include <vri/vri.h>
 
@@ -50,7 +51,7 @@ namespace vrf
                                                            uint32_t    fontWidth,
                                                            uint32_t    fontHeight);
 
-        [[nodiscard]] VriDescriptor* FontView() const noexcept { return m_fontView; }
+        [[nodiscard]] DescriptorHandle* FontView() const noexcept { return m_fontView; }
 
         // Flatten + stage this frame's geometry. Call after ImGui::Render(),
         // BEFORE the frame's command buffer is submitted-recording may overlap.
@@ -58,17 +59,17 @@ namespace vrf
 
         // Record the staging -> device geometry copy; OUTSIDE any render pass,
         // before CmdDraw (skipping it leaves the draw with no geometry).
-        void CmdCopy(VriCommandBuffer* cmd);
+        void CmdCopy(CommandBufferHandle* cmd);
 
         // Record the UI draws; inside an open color pass matching colorFormat.
-        void CmdDraw(VriCommandBuffer* cmd);
+        void CmdDraw(CommandBufferHandle* cmd);
 
         // Evict a texture view from the renderer's per-view descriptor-set cache. MUST be
         // called before destroying any view that was ever used as an ImTextureID: the cache
         // is keyed by pointer, so a later texture whose descriptor reuses the freed address
         // would otherwise bind the stale set (destroyed imageView -> GPU fault, and on
         // Windows a black window after aggressive resizes).
-        void FreeTexture(VriDescriptor* textureView);
+        void FreeTexture(DescriptorHandle* textureView);
 
     private:
         void Reset() noexcept;
@@ -76,7 +77,7 @@ namespace vrf
         RenderDevice*     m_device = nullptr;
         VriImguiInterface m_api {};
         VriImgui*         m_gui      = nullptr;
-        VriDescriptor*    m_fontView = nullptr;
+        DescriptorHandle* m_fontView = nullptr;
 
         bool                             m_hasData = false;
         std::vector<VriImguiVertex>      m_vertices;

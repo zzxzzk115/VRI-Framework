@@ -12,6 +12,7 @@
 #include <string>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -41,7 +42,7 @@ namespace vrf
     public:
         GraphicsPipelineBuilder();
 
-        GraphicsPipelineBuilder& SetPipelineLayout(VriPipelineLayout* layout)
+        GraphicsPipelineBuilder& SetPipelineLayout(PipelineLayoutHandle* layout)
         {
             m_layout = layout;
             return *this;
@@ -169,7 +170,7 @@ namespace vrf
             return *this;
         }
 
-        [[nodiscard]] Expected<VriPipeline*> Build(RenderDevice& device) const;
+        [[nodiscard]] Expected<PipelineHandle*> Build(RenderDevice& device) const;
 
     private:
         struct VariantShader
@@ -179,7 +180,7 @@ namespace vrf
             ShaderVariants     variants;
         };
 
-        VriPipelineLayout*                  m_layout = nullptr;
+        PipelineLayoutHandle*               m_layout = nullptr;
         std::vector<VriShaderDesc>          m_shaders;
         std::vector<VariantShader>          m_variantShaders;
         std::vector<VriColorAttachmentDesc> m_colorAttachments;

@@ -1,7 +1,7 @@
 /*
  * sampler_cache.hpp - desc-keyed sampler descriptor cache. Samplers are tiny
  * immutable objects requested repeatedly with identical state (per pass, per
- * material); the cache hands back one VriDescriptor per distinct desc and owns
+ * material); the cache hands back one DescriptorHandle per distinct desc and owns
  * them all. A thin wrapper over the generic ResourceCache: keyed by the full
  * desc (memcmp equality, so no hash-collision mix-ups) with RAII handles.
  */
@@ -9,6 +9,7 @@
 
 #include <cstring>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/gpu/resource_cache.hpp"
@@ -45,12 +46,12 @@ namespace vrf
         SamplerCache& operator=(SamplerCache&&) noexcept = default;
 
         // Cached create-or-return; nullptr on creation failure.
-        [[nodiscard]] VriDescriptor* Get(const VriSamplerDesc&);
+        [[nodiscard]] DescriptorHandle* Get(const VriSamplerDesc&);
 
         void Clear() noexcept { m_cache.Clear(); }
 
     private:
-        RenderDevice*                                                            m_device {nullptr};
-        ResourceCache<detail::SamplerKey, VriDescriptor, detail::SamplerKeyHash> m_cache;
+        RenderDevice*                                                               m_device {nullptr};
+        ResourceCache<detail::SamplerKey, DescriptorHandle, detail::SamplerKeyHash> m_cache;
     };
 } // namespace vrf

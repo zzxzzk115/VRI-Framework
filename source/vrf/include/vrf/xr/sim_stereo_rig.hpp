@@ -6,6 +6,8 @@
  */
 #pragma once
 
+#include "vrf/gpu/vri_types.hpp"
+
 #include <memory>
 
 #include "vrf/xr/stereo_rig.hpp"
@@ -37,7 +39,7 @@ namespace vrf::xr
                                                                             const SimStereoRigDesc& = {});
 
         [[nodiscard]] Expected<StereoFrame> BeginFrame() override;
-        void                                PreSubmit(VriCommandBuffer*, StereoFrame&) override {}
+        void                                PreSubmit(CommandBufferHandle*, StereoFrame&) override {}
         void                                EndFrame(const StereoFrame&) override {}
 
         [[nodiscard]] Extent2D  EyeExtent() const override { return m_desc.eyeExtent; }

@@ -13,6 +13,7 @@
 #include <memory>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/ext/vri_ext_raytracing.h>
 #include <vri/vri.h>
 
@@ -80,7 +81,7 @@ namespace vrf
                     VriAsGeometryFlags                 geometryFlags = VriAsGeometry_None,
                     VriAccelerationStructureBuildFlags buildFlags    = VriAccelerationStructureBuild_PreferFastTrace);
 
-        void CmdBuild(VriCommandBuffer*);
+        void CmdBuild(CommandBufferHandle*);
 
         [[nodiscard]] uint64_t                  DeviceAddress() const;
         [[nodiscard]] VriAccelerationStructure* Handle() const noexcept { return m_as; }
@@ -117,11 +118,11 @@ namespace vrf
         // Map-write the instance records (count <= maxInstances).
         void SetInstances(const AsInstance* instances, uint32_t count);
 
-        void CmdBuild(VriCommandBuffer*);
+        void CmdBuild(CommandBufferHandle*);
 
         // Descriptor for binding (VriDescriptorType_AccelerationStructure);
         // cached, destroyed with the Tlas.
-        [[nodiscard]] VriDescriptor* Descriptor();
+        [[nodiscard]] DescriptorHandle* Descriptor();
 
         [[nodiscard]] VriAccelerationStructure* Handle() const noexcept { return m_as; }
         [[nodiscard]] explicit                  operator bool() const noexcept { return m_as != nullptr; }
@@ -132,8 +133,8 @@ namespace vrf
         RenderDevice*             m_device = nullptr;
         VriRayTracingInterface    m_api {};
         VriAccelerationStructure* m_as             = nullptr;
-        VriBuffer*                m_instanceBuffer = nullptr;
-        VriDescriptor*            m_descriptor     = nullptr;
+        BufferHandle*             m_instanceBuffer = nullptr;
+        DescriptorHandle*         m_descriptor     = nullptr;
         uint32_t                  m_maxInstances   = 0;
 
         VriAsGeometryDesc            m_geometry {};
@@ -152,9 +153,9 @@ namespace vrf
         RayTracingPipeline(RayTracingPipeline&& other) noexcept;
         RayTracingPipeline& operator=(RayTracingPipeline&& other) noexcept;
 
-        void CmdTraceRays(VriCommandBuffer*, uint32_t width, uint32_t height, uint32_t depth = 1) const;
+        void CmdTraceRays(CommandBufferHandle*, uint32_t width, uint32_t height, uint32_t depth = 1) const;
 
-        [[nodiscard]] VriPipeline*                                   Handle() const noexcept { return m_pipeline; }
+        [[nodiscard]] PipelineHandle*                                Handle() const noexcept { return m_pipeline; }
         [[nodiscard]] const std::shared_ptr<fg::PipelineLayoutInfo>& Layout() const noexcept { return m_layout; }
         [[nodiscard]] explicit operator bool() const noexcept { return m_pipeline != nullptr; }
 
@@ -164,8 +165,8 @@ namespace vrf
 
         RenderDevice*          m_device = nullptr;
         VriRayTracingInterface m_api {};
-        VriPipeline*           m_pipeline = nullptr;
-        VriBuffer*             m_sbt      = nullptr;
+        PipelineHandle*        m_pipeline = nullptr;
+        BufferHandle*          m_sbt      = nullptr;
 
         std::shared_ptr<fg::PipelineLayoutInfo> m_layout;
 

@@ -17,6 +17,8 @@
  */
 #pragma once
 
+#include "vrf/gpu/vri_types.hpp"
+
 #include "vrf/core/math.hpp"
 #include "vrf/core/result.hpp"
 #include "vrf/fg/texture.hpp"
@@ -42,7 +44,7 @@ namespace vrf::xr
 
         // Record the frame-final transition of colorTarget into `cmd` (before
         // the command buffer is submitted).
-        virtual void PreSubmit(VriCommandBuffer* cmd, StereoFrame&) = 0;
+        virtual void PreSubmit(CommandBufferHandle* cmd, StereoFrame&) = 0;
 
         // After submission. XR: xrReleaseSwapchainImage + xrEndFrame.
         virtual void EndFrame(const StereoFrame&) = 0;

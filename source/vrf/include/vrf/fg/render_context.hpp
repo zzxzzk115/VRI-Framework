@@ -21,6 +21,7 @@
 #include <variant>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <glm/glm.hpp>
 #include <vri/vri.h>
 
@@ -43,7 +44,7 @@ namespace vrf::fg
     // (usually from shader reflection) and shared by all its variants.
     struct PipelineLayoutInfo
     {
-        VriPipelineLayout* handle {nullptr};
+        PipelineLayoutHandle* handle {nullptr};
 
         struct Set
         {
@@ -55,7 +56,7 @@ namespace vrf::fg
 
     struct PassPipeline
     {
-        VriPipeline*                        pipeline {nullptr};
+        PipelineHandle*                     pipeline {nullptr};
         std::shared_ptr<PipelineLayoutInfo> layout;
         bool                                compute {false};
 
@@ -68,7 +69,7 @@ namespace vrf::fg
     {
         struct SeparateSampler
         {
-            VriDescriptor* handle {nullptr};
+            DescriptorHandle* handle {nullptr};
         };
         // Sampled texture. Under VRI the sampler is always a separate binding;
         // this maps to a sampled view (name kept for source compatibility).
@@ -99,8 +100,8 @@ namespace vrf::fg
         // Pre-made view descriptor (acceleration structures, external views).
         struct RawDescriptor
         {
-            VriDescriptor*    handle {nullptr};
-            VriDescriptorType type {VriDescriptorType_Texture};
+            DescriptorHandle* handle {nullptr};
+            DescriptorType    type {VriDescriptorType_Texture};
         };
     } // namespace bindings
 
@@ -112,9 +113,9 @@ namespace vrf::fg
                                          bindings::StorageBuffer,
                                          bindings::RawDescriptor>;
 
-    using ResourceBindings = std::unordered_map<uint32_t, ResourceBinding>;   // binding -> resource
-    using ResourceSet      = std::unordered_map<uint32_t, ResourceBindings>;  // set -> bindings
-    using Samplers         = std::unordered_map<std::string, VriDescriptor*>; // name -> sampler
+    using ResourceBindings = std::unordered_map<uint32_t, ResourceBinding>;      // binding -> resource
+    using ResourceSet      = std::unordered_map<uint32_t, ResourceBindings>;     // set -> bindings
+    using Samplers         = std::unordered_map<std::string, DescriptorHandle*>; // name -> sampler
 
     // ---- attachments ------------------------------------------------------
 
@@ -155,16 +156,16 @@ namespace vrf::fg
         DescriptorAllocator(DescriptorAllocator&&) noexcept;
         DescriptorAllocator& operator=(DescriptorAllocator&&) noexcept;
 
-        [[nodiscard]] VriDescriptorSet* Allocate(const PipelineLayoutInfo&, uint32_t setIndex);
+        [[nodiscard]] DescriptorSetHandle* Allocate(const PipelineLayoutInfo&, uint32_t setIndex);
 
         void Reset();
 
     private:
         void Release() noexcept;
 
-        RenderDevice*                   m_device = nullptr;
-        std::vector<VriDescriptorPool*> m_pools;
-        std::size_t                     m_active = 0;
+        RenderDevice*                      m_device = nullptr;
+        std::vector<DescriptorPoolHandle*> m_pools;
+        std::size_t                        m_active = 0;
     };
 
     // ---- the context -------------------------------------------------------
@@ -173,14 +174,14 @@ namespace vrf::fg
     {
     public:
         RenderContext(RenderDevice&        device,
-                      VriCommandBuffer*    cmd,
+                      CommandBufferHandle* cmd,
                       Samplers&            samplers,
                       DescriptorAllocator& descriptors);
         RenderContext(const RenderContext&) = delete;
         virtual ~RenderContext()            = default;
 
         RenderDevice&                  device;
-        VriCommandBuffer*              cmd {nullptr};
+        CommandBufferHandle*           cmd {nullptr};
         std::optional<FramebufferInfo> framebufferInfo;
         ResourceSet                    resourceSet;
         Samplers&                      samplers;
@@ -211,13 +212,13 @@ namespace vrf::fg
         void RenderFullScreenPostProcess(const PassPipeline&);
 
         // Replace/insert a sampler binding at (set, binding).
-        void SetSampler(uint32_t set, uint32_t binding, VriDescriptor* sampler);
+        void SetSampler(uint32_t set, uint32_t binding, DescriptorHandle* sampler);
 
     private:
         void BindDescriptorSets(const PassPipeline&);
 
         // Reused across BindSingleDescriptorSet calls so per-draw descriptor binding does not
         // heap-allocate a fresh view list every draw (recording is single-threaded).
-        std::vector<const VriDescriptor*> m_bindScratch;
+        std::vector<const DescriptorHandle*> m_bindScratch;
     };
 } // namespace vrf::fg

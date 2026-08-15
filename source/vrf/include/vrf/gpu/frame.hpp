@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -33,22 +34,22 @@ namespace vrf
         [[nodiscard]] static Expected<Frame> Create(RenderDevice& device);
 
         // Reset the allocator and begin recording; returns the command buffer.
-        [[nodiscard]] VriCommandBuffer* Begin();
+        [[nodiscard]] CommandBufferHandle* Begin();
 
         // End recording, submit (signalling the timeline fence), and wait for the GPU.
         void Submit();
 
-        [[nodiscard]] VriCommandBuffer* Cmd() const noexcept { return m_cmd; }
-        [[nodiscard]] VriFence*         Fence() const noexcept { return m_fence; }
-        [[nodiscard]] uint64_t          Value() const noexcept { return m_value; }
+        [[nodiscard]] CommandBufferHandle* Cmd() const noexcept { return m_cmd; }
+        [[nodiscard]] FenceHandle*         Fence() const noexcept { return m_fence; }
+        [[nodiscard]] uint64_t             Value() const noexcept { return m_value; }
 
     private:
         void Reset() noexcept;
 
-        RenderDevice*        m_device = nullptr;
-        VriCommandAllocator* m_alloc  = nullptr;
-        VriCommandBuffer*    m_cmd    = nullptr;
-        VriFence*            m_fence  = nullptr;
-        uint64_t             m_value  = 0;
+        RenderDevice*           m_device = nullptr;
+        CommandAllocatorHandle* m_alloc  = nullptr;
+        CommandBufferHandle*    m_cmd    = nullptr;
+        FenceHandle*            m_fence  = nullptr;
+        uint64_t                m_value  = 0;
     };
 } // namespace vrf

@@ -5,6 +5,7 @@
 
 #include <cstdint>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -28,7 +29,7 @@ namespace vrf
             return *this;
         }
 
-        BufferBuilder& SetMemoryLocation(VriMemoryLocation location)
+        BufferBuilder& SetMemoryLocation(MemoryLocation location)
         {
             m_desc.memoryLocation = location;
             return *this;
@@ -40,7 +41,7 @@ namespace vrf
             return *this;
         }
 
-        [[nodiscard]] Expected<VriBuffer*> Build(RenderDevice& device) const;
+        [[nodiscard]] Expected<BufferHandle*> Build(RenderDevice& device) const;
 
     private:
         VriBufferDesc m_desc {};

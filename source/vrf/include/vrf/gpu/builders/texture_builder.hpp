@@ -5,6 +5,7 @@
 
 #include <cstdint>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/math.hpp"
@@ -19,7 +20,7 @@ namespace vrf
     public:
         TextureBuilder();
 
-        TextureBuilder& SetType(VriTextureType type)
+        TextureBuilder& SetType(TextureType type)
         {
             m_desc.type = type;
             return *this;
@@ -71,13 +72,13 @@ namespace vrf
             return *this;
         }
 
-        TextureBuilder& SetMemoryLocation(VriMemoryLocation location)
+        TextureBuilder& SetMemoryLocation(MemoryLocation location)
         {
             m_desc.memoryLocation = location;
             return *this;
         }
 
-        [[nodiscard]] Expected<VriTexture*> Build(RenderDevice& device) const;
+        [[nodiscard]] Expected<TextureHandle*> Build(RenderDevice& device) const;
 
     private:
         VriTextureDesc m_desc {};

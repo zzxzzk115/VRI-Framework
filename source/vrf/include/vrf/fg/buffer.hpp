@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <unordered_map>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -58,13 +59,13 @@ namespace vrf::fg
 
         [[nodiscard]] static Expected<Buffer> Create(RenderDevice&, const Desc&);
 
-        [[nodiscard]] VriBuffer*  Handle() const noexcept { return m_buffer; }
-        [[nodiscard]] const Desc& GetDesc() const noexcept { return m_desc; }
-        [[nodiscard]] uint64_t    GetSize() const noexcept { return m_desc.dataSize(); }
-        [[nodiscard]] explicit    operator bool() const noexcept { return m_buffer != nullptr; }
+        [[nodiscard]] BufferHandle* Handle() const noexcept { return m_buffer; }
+        [[nodiscard]] const Desc&   GetDesc() const noexcept { return m_desc; }
+        [[nodiscard]] uint64_t      GetSize() const noexcept { return m_desc.dataSize(); }
+        [[nodiscard]] explicit      operator bool() const noexcept { return m_buffer != nullptr; }
 
         // View descriptor for shader binding (ConstantBuffer / StorageBuffer).
-        [[nodiscard]] VriDescriptor* View(VriDescriptorType);
+        [[nodiscard]] DescriptorHandle* View(DescriptorType);
 
         // Host-visible write (uniform/storage transient uploads). Maps, copies,
         // unmaps. Only valid for buffers created HostUpload (uniform buffers are).
@@ -74,14 +75,14 @@ namespace vrf::fg
         VriAccessStage state {VriAccess_None, VriPipelineStage_AllCommands};
 
     private:
-        Buffer(RenderDevice& device, VriBuffer* buffer, const Desc& desc) noexcept;
+        Buffer(RenderDevice& device, BufferHandle* buffer, const Desc& desc) noexcept;
 
         void Reset() noexcept;
 
         RenderDevice* m_device = nullptr;
-        VriBuffer*    m_buffer = nullptr;
+        BufferHandle* m_buffer = nullptr;
         Desc          m_desc {};
 
-        std::unordered_map<uint32_t, VriDescriptor*> m_views;
+        std::unordered_map<uint32_t, DescriptorHandle*> m_views;
     };
 } // namespace vrf::fg

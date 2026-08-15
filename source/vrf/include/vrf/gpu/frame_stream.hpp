@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -40,7 +41,7 @@ namespace vrf
 
         // Wait until this slot's previous submission completed (no-op on first
         // use), reset its allocator, and open its command buffer.
-        [[nodiscard]] VriCommandBuffer* Begin();
+        [[nodiscard]] CommandBufferHandle* Begin();
 
         // Close and submit the current slot's command buffer, signalling the
         // timeline. Does NOT wait; advances to the next slot.
@@ -51,7 +52,7 @@ namespace vrf
 
         [[nodiscard]] uint32_t FrameIndex() const noexcept { return m_slotIndex; }
         [[nodiscard]] uint32_t FramesInFlight() const noexcept { return static_cast<uint32_t>(m_slots.size()); }
-        [[nodiscard]] VriCommandBuffer* Cmd() const noexcept
+        [[nodiscard]] CommandBufferHandle* Cmd() const noexcept
         {
             return m_slots.empty() ? nullptr : m_slots[m_slotIndex].cmd;
         }
@@ -61,14 +62,14 @@ namespace vrf
 
         struct Slot
         {
-            VriCommandAllocator* alloc {nullptr};
-            VriCommandBuffer*    cmd {nullptr};
-            uint64_t             submittedValue {0}; // timeline value signalled by this slot's last submit
+            CommandAllocatorHandle* alloc {nullptr};
+            CommandBufferHandle*    cmd {nullptr};
+            uint64_t                submittedValue {0}; // timeline value signalled by this slot's last submit
         };
 
         RenderDevice*     m_device = nullptr;
         std::vector<Slot> m_slots;
-        VriFence*         m_fence     = nullptr;
+        FenceHandle*      m_fence     = nullptr;
         uint64_t          m_nextValue = 0;
         uint32_t          m_slotIndex = 0;
     };

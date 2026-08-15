@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <string>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -26,7 +27,7 @@ namespace vrf
     public:
         ComputePipelineBuilder() = default;
 
-        ComputePipelineBuilder& SetPipelineLayout(VriPipelineLayout* layout)
+        ComputePipelineBuilder& SetPipelineLayout(PipelineLayoutHandle* layout)
         {
             m_layout = layout;
             return *this;
@@ -52,14 +53,14 @@ namespace vrf
             return *this;
         }
 
-        [[nodiscard]] Expected<VriPipeline*> Build(RenderDevice& device) const;
+        [[nodiscard]] Expected<PipelineHandle*> Build(RenderDevice& device) const;
 
     private:
-        VriPipelineLayout* m_layout   = nullptr;
-        const void*        m_bytecode = nullptr;
-        size_t             m_size     = 0;
-        std::string        m_entryPoint {"main"};
-        ShaderVariants     m_variants {};
-        bool               m_hasVariants = false;
+        PipelineLayoutHandle* m_layout   = nullptr;
+        const void*           m_bytecode = nullptr;
+        size_t                m_size     = 0;
+        std::string           m_entryPoint {"main"};
+        ShaderVariants        m_variants {};
+        bool                  m_hasVariants = false;
     };
 } // namespace vrf

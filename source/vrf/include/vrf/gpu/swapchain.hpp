@@ -1,11 +1,12 @@
 /*
- * swapchain.hpp - RAII wrapper over a VriSwapChain (acquire / present / resize).
+ * swapchain.hpp - RAII wrapper over a SwapChainHandle (acquire / present / resize).
  */
 #pragma once
 
 #include <cstdint>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/math.hpp"
@@ -64,12 +65,12 @@ namespace vrf
         // already active.
         bool SetPresentMode(VriPresentMode mode);
 
-        [[nodiscard]] VriTexture*    Texture(uint32_t index) const;
+        [[nodiscard]] TextureHandle* Texture(uint32_t index) const;
         [[nodiscard]] uint32_t       TextureCount() const noexcept { return static_cast<uint32_t>(m_textures.size()); }
         [[nodiscard]] VriFormat      Format() const noexcept { return m_format; }
         [[nodiscard]] Extent2D       Extent() const noexcept { return m_extent; }
         [[nodiscard]] VriPresentMode PresentMode() const noexcept { return m_desc.presentMode; }
-        [[nodiscard]] VriSwapChain*  Handle() const noexcept { return m_swapchain; }
+        [[nodiscard]] SwapChainHandle* Handle() const noexcept { return m_swapchain; }
 
     private:
         void Reset() noexcept;
@@ -78,13 +79,13 @@ namespace vrf
         // requested one); falls back to `requested` on backends without GetSwapChainExtent.
         void AdoptActualExtent(Extent2D requested);
 
-        RenderDevice* m_device    = nullptr;
-        VriSwapChain* m_swapchain = nullptr;
-        VriFormat     m_format    = VriFormat_Unknown;
-        Extent2D      m_extent {};
+        RenderDevice*    m_device    = nullptr;
+        SwapChainHandle* m_swapchain = nullptr;
+        VriFormat        m_format    = VriFormat_Unknown;
+        Extent2D         m_extent {};
         // The desc this swapchain was built from, kept so SetPresentMode can rebuild with
         // everything else (window, format, texture count) unchanged.
-        SwapchainDesc            m_desc {};
-        std::vector<VriTexture*> m_textures;
+        SwapchainDesc               m_desc {};
+        std::vector<TextureHandle*> m_textures;
     };
 } // namespace vrf

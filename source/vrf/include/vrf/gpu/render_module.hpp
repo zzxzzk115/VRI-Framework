@@ -16,6 +16,7 @@
 #include <memory>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/math.hpp"
@@ -50,11 +51,11 @@ namespace vrf
     // (color [+ depth] bound and cleared, viewport/scissor set). Record draws into `cmd`.
     struct FrameContext
     {
-        bool              valid      = false; // false => acquire was out of date; Resize() and skip
-        VriCommandBuffer* cmd        = nullptr;
-        VriTexture*       backbuffer = nullptr;
-        VriDescriptor*    colorView  = nullptr;
-        Extent2D          extent {};
+        bool                 valid      = false; // false => acquire was out of date; Resize() and skip
+        CommandBufferHandle* cmd        = nullptr;
+        TextureHandle*       backbuffer = nullptr;
+        DescriptorHandle*    colorView  = nullptr;
+        Extent2D             extent {};
     };
 
     class RenderModule
@@ -91,7 +92,7 @@ namespace vrf
         [[nodiscard]] bool ImGuiEnabled() const noexcept { return m_imguiReady; }
         // Create the imgui renderer with a font atlas (RGBA8, from io.Fonts->GetTexDataAsRGBA32);
         // returns the font texture view to set as ImGui's default texture id.
-        [[nodiscard]] Expected<VriDescriptor*> InitImGui(const void* fontPixels, uint32_t width, uint32_t height);
+        [[nodiscard]] Expected<DescriptorHandle*> InitImGui(const void* fontPixels, uint32_t width, uint32_t height);
         // Flatten + stage this frame's ImGui geometry. Call after ImGui::Render(), before BeginFrame().
         void UploadImGui(ImDrawData* drawData);
 #endif
@@ -102,17 +103,17 @@ namespace vrf
         void RecreateDepth(Extent2D extent);
         void DestroyDepth();
 
-        RenderModuleDesc m_desc;
-        RenderDevice     m_device;
-        Swapchain        m_swapchain;
-        Frame            m_frame;
-        VriTexture*      m_depthTexture = nullptr;
-        VriDescriptor*   m_depthView    = nullptr;
+        RenderModuleDesc  m_desc;
+        RenderDevice      m_device;
+        Swapchain         m_swapchain;
+        Frame             m_frame;
+        TextureHandle*    m_depthTexture = nullptr;
+        DescriptorHandle* m_depthView    = nullptr;
 
         // transient per-frame state (valid between BeginFrame and EndFrame)
-        VriTexture*    m_backbuffer = nullptr;
-        VriDescriptor* m_colorView  = nullptr;
-        bool           m_inFrame    = false;
+        TextureHandle*    m_backbuffer = nullptr;
+        DescriptorHandle* m_colorView  = nullptr;
+        bool              m_inFrame    = false;
 
 #if defined(VRF_WITH_IMGUI)
         VriImguiInterface                m_guiApi {};

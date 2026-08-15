@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "vrf/gpu/vri_types.hpp"
 #include <vri/vri.h>
 
 #include "vrf/core/result.hpp"
@@ -36,7 +37,7 @@ namespace vrf
             return *this;
         }
 
-        [[nodiscard]] Expected<VriPipelineLayout*> Build(RenderDevice& device) const;
+        [[nodiscard]] Expected<PipelineLayoutHandle*> Build(RenderDevice& device) const;
 
     private:
         struct SetEntry
