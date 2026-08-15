@@ -15,6 +15,17 @@
 
 #if defined(VRF_ENABLE_BAKE_BC7)
 #include <ktx.h>
+#if defined(_WIN32)
+// NOMINMAX: windows.h defines min/max as macros, which breaks every std::max below.
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/mach_host.h>
+#elif defined(__linux__)
+#include <unistd.h>
+#endif
 #endif
 
 namespace vrf
@@ -646,8 +657,42 @@ namespace vrf
             return true;
         }
 
-        // One texture per hardware thread. Encoding is the bake's dominant cost and is
-        // embarrassingly parallel across textures.
+        // Physical memory currently available, or 0 when the platform cannot say. Only used to
+        // BOUND the encoder pool below, never to decide whether to compress at all.
+        uint64_t AvailablePhysicalBytes()
+        {
+#if defined(_WIN32)
+            MEMORYSTATUSEX status {};
+            status.dwLength = sizeof(status);
+            return GlobalMemoryStatusEx(&status) ? uint64_t {status.ullAvailPhys} : 0ull;
+#elif defined(__linux__)
+            const long pages    = sysconf(_SC_AVPHYS_PAGES);
+            const long pageSize = sysconf(_SC_PAGE_SIZE);
+            return (pages > 0 && pageSize > 0) ? uint64_t(pages) * uint64_t(pageSize) : 0ull;
+#elif defined(__APPLE__)
+            vm_statistics64_data_t stats {};
+            mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
+            if (host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&stats), &count) !=
+                KERN_SUCCESS)
+                return 0ull;
+            vm_size_t pageSize = 0;
+            if (host_page_size(mach_host_self(), &pageSize) != KERN_SUCCESS)
+                return 0ull;
+            return uint64_t(stats.free_count + stats.inactive_count) * uint64_t(pageSize);
+#else
+            return 0ull;
+#endif
+        }
+
+        // One texture per hardware thread, BOUNDED BY FREE MEMORY. The bake's peak is not the
+        // encode itself but what surrounds it: every decoded RGBA8 texture in the model is already
+        // resident (a real scene runs to several GB), and each worker allocates a full ktx copy of
+        // its texture plus the UASTC encoder's scratch on top of that. Sizing the pool by core
+        // count alone made the transient scale with the machine's parallelism while the resident
+        // set stayed fixed, so a high-core / modest-RAM machine (20 threads, 16 GB) died of
+        // std::bad_alloc mid-bake - and an allocation failure inside a worker thread is an
+        // uncaught exception, i.e. terminate(), i.e. the whole bake lost with only a .tmp behind.
+        // Encoding is embarrassingly parallel, so a smaller pool costs wall clock and nothing else.
         void CompressTexturesBc7(Mesh& mesh)
         {
             if (mesh.textures.empty())
@@ -660,17 +705,53 @@ namespace vrf
             std::atomic<size_t> next {0};
             std::atomic<size_t> converted {0};
 
-            const unsigned workers = std::max(
+            unsigned workers = std::max(
                 1u,
                 std::min<unsigned>(std::thread::hardware_concurrency(), static_cast<unsigned>(mesh.textures.size())));
+            if (const uint64_t available = AvailablePhysicalBytes(); available != 0)
+            {
+                // Budget per worker: the largest texture, counted a few times over for the ktx
+                // storage copy, the transcode target and the encoder's own scratch. Deliberately
+                // pessimistic - overestimating costs wall clock, underestimating loses the bake.
+                const uint64_t largest = std::accumulate(
+                    mesh.textures.begin(), mesh.textures.end(), uint64_t {0}, [](uint64_t m, const Texture& t) {
+                        return std::max(m, t.SizeBytes());
+                    });
+                const uint64_t perWorker = std::max<uint64_t>(largest * 4ull, 64ull * 1024 * 1024);
+                // Spend half of what is free: the rest absorbs the writer's own buffers and
+                // whatever else the machine is doing while a multi-minute bake runs.
+                const auto affordable = static_cast<unsigned>(std::max<uint64_t>(available / 2ull / perWorker, 1ull));
+                if (affordable < workers)
+                {
+                    LogInfo("asset cache: BC7 pool {} -> {} threads ({} MB free, ~{} MB per worker)",
+                            workers,
+                            affordable,
+                            available / (1024 * 1024),
+                            perWorker / (1024 * 1024));
+                    workers = affordable;
+                }
+            }
             std::vector<std::thread> pool;
             pool.reserve(workers);
             for (unsigned w = 0; w < workers; ++w)
             {
                 pool.emplace_back([&] {
                     for (size_t i = next++; i < mesh.textures.size(); i = next++)
-                        if (CompressTextureBc7(mesh.textures[i]))
-                            ++converted;
+                    {
+                        // A worker that still runs out of memory must not take the process with
+                        // it: the texture simply stays uncompressed, which the format already
+                        // supports (Texture::compressed is per texture), and the bake completes.
+                        try
+                        {
+                            if (CompressTextureBc7(mesh.textures[i]))
+                                ++converted;
+                        }
+                        catch (const std::bad_alloc&)
+                        {
+                            LogWarning("asset cache: out of memory compressing texture {}, leaving it uncompressed",
+                                       i);
+                        }
+                    }
                 });
             }
             for (std::thread& t : pool)

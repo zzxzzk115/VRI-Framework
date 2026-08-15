@@ -37,8 +37,14 @@ option_end()
 -- Block-compress baked textures (asset_cache). Uses libktx's UASTC encoder, transcoded to
 -- BC7 at bake time so runtime stays a plain read. Same libktx dependency as the KTX2 loader;
 -- without it the bake still works, storing textures uncompressed (~4x the disk).
+--
+-- ON by default, because off is a trap rather than a saving: the uncompressed bake keeps textures
+-- RGBA8 at runtime, and on a real scene (Intel Sponza + props, ~6.6 GB) that thrashes VRAM hard
+-- enough to take the frame from ~28 ms to ~411 ms. A consumer who simply forgets the flag does not
+-- read that as "an option is off", they read it as a broken build. Disable it only to avoid
+-- pulling libktx.
 option("vrf_bake_bc7")
-    set_default(false)
+    set_default(true)
     set_showmenu(true)
     set_description("Block-compress baked cache textures to BC7 (libktx UASTC encoder)")
 option_end()
