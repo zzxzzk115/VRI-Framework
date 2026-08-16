@@ -1,15 +1,9 @@
 /*
- * ui_window.hpp - a minimal dockable-tool-window layer for ImGui apps.
+ * ui_window.hpp - dockable tool windows for ImGui apps. Pair with DockspaceHost.
  *
- * UIWindow<Ctx> is one dockable ImGui window: a stable name (the ImGui "###id",
- * which docking / imgui.ini identity keys on), a display label that may change
- * without breaking that identity, and an open flag the host's View menu toggles.
- * UIWindowManager<Ctx> owns a set of windows and dispatches their draw each frame
- * (firing onClosed on the open -> closed edge). Ctx is the app's own per-frame
- * context type - the framework does not prescribe one.
- *
- * Header-only and ImGui-agnostic: a window wraps its own ImGui::Begin(title(), &open())
- * / End() inside onDraw. Pair with vrf::ui::DockspaceHost for the dockspace shell.
+ * A window owns its Begin(title(), &open()) / End(). `name` is the "###id" docking and
+ * imgui.ini key on, so the display label can change without losing the layout.
+ * Ctx is the app's own per-frame context.
  */
 #pragma once
 
@@ -28,8 +22,6 @@ namespace vrf::ui
     class UIWindow
     {
     public:
-        // `name` is the stable identity ("###name"); `displayName` is the visible label
-        // (defaults to the name). Changing the display later keeps docking/ini intact.
         explicit UIWindow(std::string name, std::string displayName = {}) :
             m_Name {std::move(name)}, m_DisplayName {displayName.empty() ? m_Name : std::move(displayName)},
             m_Title {m_DisplayName + "###" + m_Name}
@@ -39,12 +31,8 @@ namespace vrf::ui
         UIWindow(const UIWindow&)            = delete;
         UIWindow& operator=(const UIWindow&) = delete;
 
-        // Called each frame while open. Implementations wrap their body in
-        // ImGui::Begin(title(), &open(), flags) / ImGui::End().
         virtual void onDraw(Ctx&) = 0;
-
-        // Fired once on the frame the open flag flips true -> false (e.g. release
-        // per-window GPU targets while hidden).
+        // Fires once on the open -> closed edge; release per-window GPU targets here.
         virtual void onClosed(Ctx&) {}
 
         [[nodiscard]] const std::string& name() const noexcept { return m_Name; }
