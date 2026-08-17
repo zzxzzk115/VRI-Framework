@@ -80,10 +80,24 @@ namespace vrf
 #endif
                     switch (e.type)
                     {
-                        case SDL_EVENT_QUIT:
+                        // OUR window only. SDL pumps the whole THREAD message queue, so a window
+                        // belonging to someone else in this process reaches us as well - the Meta
+                        // XR Simulator is an in-process OpenXR runtime and posts WM_QUIT when its
+                        // debug window is closed, which SDL reports as SDL_EVENT_QUIT. Honouring
+                        // that shut the host app down (cleanly, exit 0) the moment the simulator
+                        // window was closed, instead of ending the VR session and carrying on.
                         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
+                            if (e.window.windowID == SDL_GetWindowID(m_window))
+                                m_shouldClose = true;
+                            break;
+#if !defined(_WIN32)
+                        // Elsewhere SDL_EVENT_QUIT is a genuine application-level quit (macOS
+                        // Cmd+Q, a session-manager logout) that no foreign in-process window can
+                        // forge, and closing our own window still arrives as CLOSE_REQUESTED.
+                        case SDL_EVENT_QUIT:
                             m_shouldClose = true;
                             break;
+#endif
                         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
                         case SDL_EVENT_WINDOW_RESIZED: {
                             int wpx = 0, hpx = 0;

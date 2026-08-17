@@ -56,6 +56,10 @@ namespace vrf::xr
                 driver.m_impl->system.emplace(std::move(*probed));
                 driver.m_impl->systemName        = driver.m_impl->system->SystemName();
                 driver.m_impl->recommendedExtent = driver.m_impl->system->RecommendedEyeExtent();
+                LogInfo("vrf::xr::VrDriver: OpenXR runtime active - system '{}', recommended eye {}x{}",
+                        driver.m_impl->systemName,
+                        driver.m_impl->recommendedExtent.width,
+                        driver.m_impl->recommendedExtent.height);
             }
             else
             {
@@ -63,6 +67,15 @@ namespace vrf::xr
             }
         }
 #else
+        // Silent fallback here cost an afternoon: with vrf_with_openxr=n the whole probe compiles
+        // away, so "--mode vr without --sim" ran the DESKTOP rig and looked like the headset/Meta XR
+        // Simulator had simply not been picked up. Nothing distinguished it from a failed probe
+        // because nothing was logged at all. Say it, and say the flag that fixes it.
+        if (desc.enableXr)
+        {
+            LogWarning("vrf::xr::VrDriver: built without OpenXR (vrf_with_openxr=n) - falling back to the "
+                       "desktop simulator rig; rebuild with `xmake f --vrf_with_openxr=y` for a real session");
+        }
         (void)desc;
 #endif
         return driver;
@@ -167,9 +180,12 @@ namespace vrf::xr
     void VrDriver::Poll()
     {
 #if defined(VRF_WITH_OPENXR)
-        // A session can exit on its own (headset menu / a prior RequestExit finishing).
+        // A session can exit on its own (headset menu, the runtime quitting the app, or a prior
+        // RequestExit finishing). That ends VR, NOT the process: the app drops back to the desktop
+        // simulator rig and keeps running, and Enter VR is live again.
         if (m_impl->session && !m_impl->session->IsRunning())
         {
+            LogInfo("vrf::xr::VrDriver: session ended - back on the simulator rig");
             ExitVr();
         }
 #endif

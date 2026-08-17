@@ -94,10 +94,24 @@ namespace vrf::xr
                 xrDestroySession(session);
         }
 
+        // A runtime that has gone away must end up in Exiting, or nothing ever tears the session
+        // down: xrPollEvent just stops returning XR_SUCCESS, the state stays Running, and the app
+        // renders into a null target forever instead of dropping back to the desktop rig.
+        void Fail(XrResult r, const char* what)
+        {
+            if (r == XR_ERROR_INSTANCE_LOST || r == XR_ERROR_SESSION_LOST || r == XR_ERROR_RUNTIME_FAILURE)
+            {
+                LogWarning("vrf::xr: {} returned {} - ending the session", what, static_cast<int>(r));
+                state        = SessionState::Exiting;
+                sessionBegun = false;
+            }
+        }
+
         void PollEvents()
         {
             XrEventDataBuffer event {XR_TYPE_EVENT_DATA_BUFFER};
-            while (xrPollEvent(instance, &event) == XR_SUCCESS)
+            XrResult          pr = XR_SUCCESS;
+            while ((pr = xrPollEvent(instance, &event)) == XR_SUCCESS)
             {
                 if (event.type == XR_TYPE_EVENT_DATA_SESSION_STATE_CHANGED)
                 {
@@ -132,6 +146,11 @@ namespace vrf::xr
                     state = SessionState::Exiting;
                 }
                 event = {XR_TYPE_EVENT_DATA_BUFFER};
+            }
+            // XR_EVENT_UNAVAILABLE is the normal end of the queue; anything else is the runtime.
+            if (pr != XR_EVENT_UNAVAILABLE)
+            {
+                Fail(pr, "xrPollEvent");
             }
         }
     };
@@ -306,13 +325,15 @@ namespace vrf::xr
 
         XrFrameWaitInfo waitInfo {XR_TYPE_FRAME_WAIT_INFO};
         impl.frameState = {XR_TYPE_FRAME_STATE};
-        if (XR_FAILED(xrWaitFrame(impl.session, &waitInfo, &impl.frameState)))
+        if (const XrResult r = xrWaitFrame(impl.session, &waitInfo, &impl.frameState); XR_FAILED(r))
         {
+            impl.Fail(r, "xrWaitFrame");
             return frame;
         }
         XrFrameBeginInfo beginInfo {XR_TYPE_FRAME_BEGIN_INFO};
-        if (XR_FAILED(xrBeginFrame(impl.session, &beginInfo)))
+        if (const XrResult r = xrBeginFrame(impl.session, &beginInfo); XR_FAILED(r))
         {
+            impl.Fail(r, "xrBeginFrame");
             return frame;
         }
         impl.frameBegun = true;
