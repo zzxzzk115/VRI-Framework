@@ -36,15 +36,27 @@ namespace vrf
         FrameStream(FrameStream&& other) noexcept;
         FrameStream& operator=(FrameStream&& other) noexcept;
 
-        [[nodiscard]] static Expected<FrameStream> Create(RenderDevice& device, uint32_t framesInFlight = 2);
+        // queueType selects the queue the stream records for and submits to (the device
+        // transparently aliases compute/transfer to graphics when no dedicated queue exists,
+        // so a compute stream is always safe to create). Cross-queue pipelining wires two
+        // streams together through Submit()'s wait list + Fence()/SubmittedValue().
+        [[nodiscard]] static Expected<FrameStream>
+        Create(RenderDevice& device, uint32_t framesInFlight = 2, VriQueueType queueType = VriQueueType_Graphics);
 
         // Wait until this slot's previous submission completed (no-op on first
         // use), reset its allocator, and open its command buffer.
         [[nodiscard]] VriCommandBuffer* Begin();
 
         // Close and submit the current slot's command buffer, signalling the
-        // timeline. Does NOT wait; advances to the next slot.
-        void Submit();
+        // timeline. Does NOT wait; advances to the next slot. `waits` are GPU-side
+        // timeline waits the submission blocks on (another stream's Fence() at a
+        // SubmittedValue()) - the cross-queue dependency mechanism.
+        void Submit(const VriFenceSubmitDesc* waits = nullptr, uint32_t waitNum = 0);
+
+        // This stream's timeline fence and the value its LAST Submit() signalled (0 before the
+        // first). Together they form the wait another stream passes to its own Submit().
+        [[nodiscard]] VriFence* Fence() const noexcept { return m_fence; }
+        [[nodiscard]] uint64_t  SubmittedValue() const noexcept { return m_nextValue; }
 
         // Block until every submitted frame completed (shutdown / resize).
         void WaitAll();
@@ -71,5 +83,6 @@ namespace vrf
         VriFence*         m_fence     = nullptr;
         uint64_t          m_nextValue = 0;
         uint32_t          m_slotIndex = 0;
+        VriQueueType      m_queueType = VriQueueType_Graphics;
     };
 } // namespace vrf
