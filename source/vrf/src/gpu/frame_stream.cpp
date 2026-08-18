@@ -10,7 +10,7 @@ namespace vrf
     FrameStream::FrameStream(FrameStream&& other) noexcept :
         m_device(std::exchange(other.m_device, nullptr)), m_slots(std::move(other.m_slots)),
         m_fence(std::exchange(other.m_fence, nullptr)), m_nextValue(std::exchange(other.m_nextValue, 0)),
-        m_slotIndex(std::exchange(other.m_slotIndex, 0))
+        m_slotIndex(std::exchange(other.m_slotIndex, 0)), m_queueType(other.m_queueType)
     {
         other.m_slots.clear();
     }
@@ -25,6 +25,7 @@ namespace vrf
             m_fence     = std::exchange(other.m_fence, nullptr);
             m_nextValue = std::exchange(other.m_nextValue, 0);
             m_slotIndex = std::exchange(other.m_slotIndex, 0);
+            m_queueType = other.m_queueType;
             other.m_slots.clear();
         }
         return *this;
@@ -50,17 +51,19 @@ namespace vrf
         m_device = nullptr;
     }
 
-    Expected<FrameStream> FrameStream::Create(RenderDevice& device, const uint32_t framesInFlight)
+    Expected<FrameStream>
+    FrameStream::Create(RenderDevice& device, const uint32_t framesInFlight, const VriQueueType queueType)
     {
         const VriCoreInterface& c = device.Core();
 
         FrameStream stream;
-        stream.m_device = &device;
+        stream.m_device    = &device;
+        stream.m_queueType = queueType;
         stream.m_slots.resize(std::max(framesInFlight, 1u));
 
         for (auto& slot : stream.m_slots)
         {
-            VriResult r = c.CreateCommandAllocator(device.Handle(), VriQueueType_Graphics, &slot.alloc);
+            VriResult r = c.CreateCommandAllocator(device.Handle(), queueType, &slot.alloc);
             if (r != VriResult_Success)
                 return MakeError(r, "FrameStream::Create", "CreateCommandAllocator failed");
 
@@ -94,7 +97,7 @@ namespace vrf
         return slot.cmd;
     }
 
-    void FrameStream::Submit()
+    void FrameStream::Submit(const VriFenceSubmitDesc* waits, const uint32_t waitNum)
     {
         VRF_ZONE("FrameStream::Submit");
         VRF_FRAME_MARK();
@@ -109,12 +112,14 @@ namespace vrf
         signal.stages = VriPipelineStage_AllCommands;
 
         VriQueueSubmitDesc submit {};
+        submit.waitFences       = waitNum ? waits : nullptr;
+        submit.waitFenceNum     = waitNum;
         submit.commandBuffers   = &slot.cmd;
         submit.commandBufferNum = 1;
         submit.signalFences     = &signal;
         submit.signalFenceNum   = 1;
 
-        c.QueueSubmit(m_device->GraphicsQueue(), &submit);
+        c.QueueSubmit(m_device->Queue(m_queueType), &submit);
         slot.submittedValue = m_nextValue;
 
         m_slotIndex = (m_slotIndex + 1) % static_cast<uint32_t>(m_slots.size());
