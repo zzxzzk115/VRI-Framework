@@ -32,6 +32,9 @@ namespace
         std::size_t h {0};
         hashCombine(h, static_cast<uint32_t>(desc.type));
         hashCombine(h, desc.dataSize());
+        // Usage is part of identity: a concurrent-shared request must never be satisfied by a
+        // pooled exclusive buffer (or vice versa).
+        hashCombine(h, desc.extraUsage);
         return h;
     }
 

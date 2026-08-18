@@ -43,6 +43,9 @@ namespace vrf::fg
             BufferType type {BufferType::UniformBuffer};
             uint32_t   stride {1};
             uint64_t   capacity {0};
+            // ORed into the usage the type maps to - e.g. VriBufferUsage_ConcurrentQueues for a
+            // buffer both the graphics and compute queues touch.
+            VriBufferUsageFlags extraUsage {0};
 
             [[nodiscard]] constexpr uint64_t dataSize() const { return stride * capacity; }
             [[nodiscard]] bool               operator==(const Desc&) const = default;
