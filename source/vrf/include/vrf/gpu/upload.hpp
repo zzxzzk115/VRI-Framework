@@ -46,7 +46,7 @@ namespace vrf
 
     // rtAccelInput adds VriBufferUsage_AccelerationBuildInput to the vertex + index buffers so the
     // mesh can back a ray-tracing BLAS (Blas::Create). Requires a device with ray query / ray tracing.
-    [[nodiscard]] Expected<GpuMesh>    UploadMesh(RenderDevice& device, const Mesh& mesh, bool rtAccelInput = false);
+    [[nodiscard]] Expected<GpuMesh> UploadMesh(RenderDevice& device, const Mesh& mesh, bool rtAccelInput = false);
     // extraUsage is ORed into the created texture's usage - e.g.
     // VriTextureUsage_ConcurrentQueues for sampled assets a compute-queue pass also reads.
     [[nodiscard]] Expected<GpuTexture>
