@@ -59,14 +59,15 @@ namespace vrf::fg
         // Frames an idle pooled resource survives before eviction.
         constexpr uint64_t kMaxIdleFrames = 10;
 
+        // Evict idle entries older than maxIdle (0 = everything idle, the purge case).
         template<class Pool>
-        void heartbeat(Pool& pool, const uint64_t frame)
+        void heartbeat(Pool& pool, const uint64_t frame, const uint64_t maxIdle)
         {
             for (auto groupsIt = pool.entryGroups.begin(); groupsIt != pool.entryGroups.end();)
             {
                 auto& group = groupsIt->second;
                 std::erase_if(group, [&](auto& entry) {
-                    if (frame - entry.releasedAt >= kMaxIdleFrames)
+                    if (frame - entry.releasedAt >= maxIdle)
                     {
                         *entry.resource = {};
                         return true;
@@ -101,8 +102,14 @@ namespace vrf::fg
     void TransientResources::update()
     {
         ++m_frame;
-        heartbeat(m_textures, m_frame);
-        heartbeat(m_buffers, m_frame);
+        heartbeat(m_textures, m_frame, kMaxIdleFrames);
+        heartbeat(m_buffers, m_frame, kMaxIdleFrames);
+    }
+
+    void TransientResources::purge()
+    {
+        heartbeat(m_textures, m_frame, 0);
+        heartbeat(m_buffers, m_frame, 0);
     }
 
     Texture* TransientResources::acquireTexture(const Texture::Desc& desc)

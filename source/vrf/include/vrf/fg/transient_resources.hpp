@@ -43,6 +43,14 @@ namespace vrf::fg
         // Advance one frame: age pooled entries, evict stale ones.
         void update();
 
+        // Destroy every pooled-idle resource NOW instead of letting update() age it out. For the
+        // moment the working set changes wholesale - a render-resolution or mode switch - where
+        // the stale-extent set would otherwise coexist with its replacement for kMaxIdleFrames
+        // (a doubled memory peak) and then die in one heartbeat (a destruction stutter mid-play).
+        // The caller owns the safety contract: only call after a device drain, when nothing
+        // pooled is still referenced by an in-flight frame.
+        void purge();
+
         [[nodiscard]] Texture* acquireTexture(const Texture::Desc&);
         void                   releaseTexture(const Texture::Desc&, Texture*);
 
