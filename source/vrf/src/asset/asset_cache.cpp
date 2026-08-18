@@ -738,8 +738,7 @@ namespace vrf
                         }
                         catch (const std::bad_alloc&)
                         {
-                            LogWarning("asset cache: out of memory compressing texture {}, leaving it uncompressed",
-                                       i);
+                            LogWarning("asset cache: out of memory compressing texture {}, leaving it uncompressed", i);
                         }
                     }
                 });
