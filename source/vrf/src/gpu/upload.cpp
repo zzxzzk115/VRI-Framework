@@ -287,7 +287,8 @@ namespace vrf
         return out;
     }
 
-    Expected<GpuTexture> UploadTexture(RenderDevice& device, const Texture& texture)
+    Expected<GpuTexture>
+    UploadTexture(RenderDevice& device, const Texture& texture, const VriTextureUsageFlags extraUsage)
     {
         if (texture.Empty())
             return MakeError("UploadTexture: texture has no data");
@@ -331,7 +332,7 @@ namespace vrf
         td.mipNum              = mipLevels;
         td.layerNum            = arrayLayers;
         td.sampleNum           = 1;
-        td.usage               = VriTextureUsage_ShaderResource | VriTextureUsage_TransferDst;
+        td.usage               = VriTextureUsage_ShaderResource | VriTextureUsage_TransferDst | extraUsage;
         td.memoryLocation      = VriMemoryLocation_Device;
         VriTexture* gpuTexture = nullptr;
         if (c.CreateTexture(device.Handle(), &td, &gpuTexture) != VriResult_Success)
