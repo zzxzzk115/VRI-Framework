@@ -77,7 +77,7 @@ namespace vrf::fg
             // the structure stride too - a structured-buffer view without one is not addressable.
             .structureStride =
                 (desc.type == BufferType::StorageBuffer || desc.type == BufferType::IndirectBuffer) ? desc.stride : 0,
-            .usage          = usageFor(desc.type),
+            .usage          = usageFor(desc.type) | desc.extraUsage,
             .memoryLocation = locationFor(desc.type),
         };
 
