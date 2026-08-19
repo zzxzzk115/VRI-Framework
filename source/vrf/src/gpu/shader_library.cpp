@@ -232,6 +232,10 @@ namespace vrf
         vsh::VariantKey vk;
         vk.setShaderIdHash(shaderIdHash);
         vk.setStage(*vshStage);
+        // Whether this resolves to the base variant falls out of the same loop: base means every
+        // declared permute keyword came out 0. See ResolvedShader::isBaseVariant for why callers
+        // need it.
+        bool isBase = true;
         for (const std::string& name : declaredIt->second)
         {
             uint32_t value = 0;
@@ -241,6 +245,7 @@ namespace vrf
                     value = provided.value;
                     break;
                 }
+            isBase = isBase && value == 0;
             vk.set(name, value);
         }
 
@@ -261,8 +266,9 @@ namespace vrf
         out.dxbcSize   = bin.dxbc.size();
         out.dxil       = bin.dxil.empty() ? nullptr : bin.dxil.data();
         out.dxilSize   = bin.dxil.size();
-        out.entryPoint = bin.entryPointName;
-        out.reflection = &m_impl->reflections[hit->second];
+        out.entryPoint    = bin.entryPointName;
+        out.reflection    = &m_impl->reflections[hit->second];
+        out.isBaseVariant = isBase;
         return out;
     }
 } // namespace vrf
