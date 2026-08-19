@@ -55,12 +55,75 @@ namespace vrf
         {
             return shaderIdHash ^ (static_cast<uint64_t>(stage) * 0x9E3779B97F4A7C15ull);
         }
+
+        // vrf::ShaderReflection mirrors the cooker's layout 1:1 (shader_reflection.hpp explains why
+        // it is a mirror and not a re-export). These assertions are that mirror's contract: a
+        // vshadersystem release that renumbers either enum breaks the build here instead of
+        // silently shifting every descriptor kind or stage bit in loaded reflection.
+        static_assert(static_cast<uint8_t>(vsh::DescriptorKind::eUniformBuffer) ==
+                      static_cast<uint8_t>(DescriptorKind::UniformBuffer));
+        static_assert(static_cast<uint8_t>(vsh::DescriptorKind::eAccelerationStructure) ==
+                      static_cast<uint8_t>(DescriptorKind::AccelerationStructure));
+        static_assert(static_cast<uint8_t>(vsh::DescriptorKind::eUnknown) ==
+                      static_cast<uint8_t>(DescriptorKind::Unknown));
+        static_assert(static_cast<uint8_t>(vsh::ResourceAccess::eReadWrite) ==
+                      static_cast<uint8_t>(ResourceAccess::ReadWrite));
+        static_assert(static_cast<uint8_t>(vsh::TextureType::eUnknown) ==
+                      static_cast<uint8_t>(ReflectedTextureType::Unknown));
+        static_assert(vsh::eStageVert == static_cast<uint32_t>(ShaderStageMask::Vertex));
+        static_assert(vsh::eStageComp == static_cast<uint32_t>(ShaderStageMask::Compute));
+        static_assert(vsh::eStageRchit == static_cast<uint32_t>(ShaderStageMask::ClosestHit));
+        static_assert(vsh::eStageDomain == static_cast<uint32_t>(ShaderStageMask::TessEval));
+
+        ShaderReflection MirrorReflection(const vsh::ShaderReflection& src)
+        {
+            ShaderReflection out;
+            out.descriptors.reserve(src.descriptors.size());
+            for (const vsh::DescriptorBinding& d : src.descriptors)
+                out.descriptors.push_back({.name         = d.name,
+                                           .set          = d.set,
+                                           .binding      = d.binding,
+                                           .count        = d.count,
+                                           .kind         = static_cast<DescriptorKind>(d.kind),
+                                           .access       = static_cast<ResourceAccess>(d.access),
+                                           .stageFlags   = static_cast<ShaderStageMask>(d.stageFlags),
+                                           .runtimeSized = d.runtimeSized,
+                                           .textureType  = static_cast<ReflectedTextureType>(d.textureType)});
+
+            out.blocks.reserve(src.blocks.size());
+            for (const vsh::BlockLayout& b : src.blocks)
+            {
+                ReflectedBlock block {.name         = b.name,
+                                      .set          = b.set,
+                                      .binding      = b.binding,
+                                      .size         = b.size,
+                                      .pushConstant = b.isPushConstant,
+                                      .stageFlags   = static_cast<ShaderStageMask>(b.stageFlags),
+                                      .members      = {}};
+                block.members.reserve(b.members.size());
+                for (const vsh::BlockMember& m : b.members)
+                    block.members.push_back({.name = m.name, .offset = m.offset, .size = m.size});
+                out.blocks.push_back(std::move(block));
+            }
+
+            out.hasLocalSize = src.hasLocalSize;
+            out.localSize[0] = src.localSizeX;
+            out.localSize[1] = src.localSizeY;
+            out.localSize[2] = src.localSizeZ;
+            return out;
+        }
     } // namespace
 
     struct ShaderLibrary::Impl
     {
         // Decoded variants (SPIR-V/WGSL live here for the library's lifetime).
         std::vector<vsh::ShaderBinary> binaries;
+        // Framework-side mirror of each entry's reflection, index-aligned with `binaries`.
+        // Converted once at load so Resolve stays a pure lookup, and stored separately (rather
+        // than handed out as vsh::ShaderReflection&) to keep vshadersystem inside this file.
+        // One entry per variant, but the cooker writes the same (base-variant) table into all of
+        // a shader's variants - see the contract on ResolvedShader::reflection.
+        std::vector<ShaderReflection> reflections;
         // variantHash -> index into `binaries`.
         std::unordered_map<uint64_t, size_t> byVariantHash;
         // (shaderIdHash, stage) -> the shader's declared PERMUTE keyword names. Only permute
@@ -98,7 +161,10 @@ namespace vrf
             return MakeError(VriResult_Failure, "ShaderLibrary: read_library failed: " + lib.error().message);
 
         auto impl = std::make_unique<Impl>();
+        // Reserved to the final size up front: Resolve hands out pointers INTO these vectors, so a
+        // reallocation mid-load would dangle every previously handed-out reflection.
         impl->binaries.reserve(lib.value().entries.size());
+        impl->reflections.reserve(lib.value().entries.size());
         for (const vsh::v1::LibraryEntry& entry : lib.value().entries)
         {
             vsh::Result<vsh::ShaderBinary> bin = vsh::v1::read_binary(entry.blob);
@@ -108,6 +174,7 @@ namespace vrf
             const size_t index = impl->binaries.size();
             impl->binaries.push_back(std::move(bin.value()));
             const vsh::ShaderBinary& stored = impl->binaries[index];
+            impl->reflections.push_back(MirrorReflection(stored.reflection));
             impl->byVariantHash.emplace(entry.variantHash, index);
 
             const uint64_t key = ShaderStageKey(stored.shaderIdHash, entry.stage);
@@ -195,6 +262,7 @@ namespace vrf
         out.dxil       = bin.dxil.empty() ? nullptr : bin.dxil.data();
         out.dxilSize   = bin.dxil.size();
         out.entryPoint = bin.entryPointName;
+        out.reflection = &m_impl->reflections[hit->second];
         return out;
     }
 } // namespace vrf

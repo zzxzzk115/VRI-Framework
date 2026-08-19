@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "vrf/core/result.hpp"
+#include "vrf/gpu/shader_reflection.hpp"
 #include "vrf/gpu/vertex_layout.hpp"
 
 namespace vrf
@@ -70,6 +71,20 @@ namespace vrf
         const void* dxil      = nullptr;
         size_t      dxilSize  = 0; // bytes (Direct3D 12, SM6.0)
         std::string entryPoint;    // pipeline entry-point name baked into the variant
+
+        // The shader's declared bindings, owned by the library. Null only for a .vshlib cooked
+        // before the reflection section existed.
+        //
+        // IT IS NOT THIS VARIANT'S TABLE. vshadersystem v1.2.0 reflects the BASE variant (every
+        // permute keyword 0) and stores that same table on every variant of the shader, while the
+        // bytecode is specialized per variant. So a binding a keyword ADDS is missing from the
+        // reflection of the very variant that uses it, and a binding a keyword REMOVES is still
+        // listed. Deriving a descriptor-set layout from this for a non-base variant therefore
+        // truncates it, which is a first-frame device hang with no validation message. Use it to
+        // CROSS-CHECK a hand-written layout for the base configuration; do not use it to build one
+        // for a keyword-gated shader until the cooker emits reflection per variant.
+        // (Pinned by tests/test_shader_reflection.cpp, which fails when that changes.)
+        const ShaderReflection* reflection = nullptr;
     };
 
     // The keywords the framework derives from a vertex layout. These MUST match the keyword
