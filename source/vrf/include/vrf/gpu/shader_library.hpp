@@ -85,6 +85,13 @@ namespace vrf
         // for a keyword-gated shader until the cooker emits reflection per variant.
         // (Pinned by tests/test_shader_reflection.cpp, which fails when that changes.)
         const ShaderReflection* reflection = nullptr;
+
+        // True when every permute keyword this shader declares resolved to 0 - i.e. exactly the
+        // variant `reflection` describes. Anything that cross-checks against the reflection must
+        // gate on this: on a non-base variant the table both over-reports (a binding the variant
+        // dropped) and under-reports (one a keyword added), so a check that ignores it produces
+        // findings that are all false and trains the reader to ignore real ones.
+        bool isBaseVariant = false;
     };
 
     // The keywords the framework derives from a vertex layout. These MUST match the keyword

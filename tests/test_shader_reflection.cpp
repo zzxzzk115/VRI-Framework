@@ -111,6 +111,11 @@ TEST_CASE("shader reflection: the table is the BASE variant's, shared by every v
     REQUIRE(base.reflection != nullptr);
     REQUIRE(gated.reflection != nullptr);
 
+    // The flag a consumer gates its cross-check on: only the base variant is described by the
+    // table it is handed.
+    CHECK(base.isBaseVariant);
+    CHECK_FALSE(gated.isBaseVariant);
+
     // The bytecode really is specialized: the variant without the extra sampler is smaller.
     CHECK(gated.spirvSize < base.spirvSize);
 
