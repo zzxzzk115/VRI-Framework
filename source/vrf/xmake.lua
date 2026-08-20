@@ -62,6 +62,13 @@ target("vrf")
         add_packages("imgui", {public = true})
     end
 
+    -- Optional vplot (vrf::PlotView). Public: plot_view.hpp exposes VplFigure* so callers plot
+    -- through the vpl C API directly, which means they need the headers and the link.
+    if has_config("vrf_with_vplot") then
+        add_defines("VRF_WITH_VPLOT", {public = true})
+        add_packages("vplot", {public = true})
+    end
+
     -- Optional OpenXR (vrf::xr XrSystem/XrSession). The xr_system/xr_session TUs compile
     -- empty without VRF_WITH_OPENXR; SimStereoRig/stereo math are always in. Public so
     -- consumers see the same VRF_WITH_OPENXR headers and link the loader.

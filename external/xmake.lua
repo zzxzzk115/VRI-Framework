@@ -80,6 +80,13 @@ if has_config("vrf_with_imgui") then
     }})
 end
 
+-- Optional vplot. No VRI dependency of its own: vplot's own vri/imgui example is gated behind
+-- its vplot_build_examples option, so the package pulls only agg (vendored) + freetype + zlib.
+-- That is what keeps vrf -> vplot acyclic even though vplot's example consumes VRI.
+if has_config("vrf_with_vplot") then
+    add_requires("vplot")
+end
+
 -- Native file-open dialog for the examples' model picker.
 if has_config("vrf_build_examples") and has_config("vrf_with_imgui") then
     add_requires("nativefiledialog-extended")
