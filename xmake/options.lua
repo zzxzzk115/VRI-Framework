@@ -59,6 +59,15 @@ option_end()
 -- over VRI's interop extension (XR_KHR_vulkan_enable2 + wrapped swapchain images). The
 -- OpenXR-free parts of vrf::xr (StereoRig, SimStereoRig - desktop stereo emulation) are
 -- always built. Vulkan backend only.
+-- Optional vplot (vrf::PlotView): matplotlib-quality figures rendered into a GPU texture and,
+-- with vrf_with_imgui, into an ImGui panel. Off by default: it pulls freetype + zlib and only
+-- earns its place in tools that actually plot (benchmark reports, profiling views).
+option("vrf_with_vplot")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable the vplot plotting integration")
+option_end()
+
 option("vrf_with_openxr")
     set_default(false)
     set_showmenu(true)
