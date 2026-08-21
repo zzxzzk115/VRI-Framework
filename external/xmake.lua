@@ -84,7 +84,9 @@ end
 -- its vplot_build_examples option, so the package pulls only agg (vendored) + freetype + zlib.
 -- That is what keeps vrf -> vplot acyclic even though vplot's example consumes VRI.
 if has_config("vrf_with_vplot") then
-    add_requires("vplot")
+    -- >= 0.1.1: 0.1.0 renders no text at all when linked as a package (it looks for a font file
+    -- by walking up from the working directory, and skips text rather than failing without one).
+    add_requires("vplot 0.1.1")
 end
 
 -- Native file-open dialog for the examples' model picker.
