@@ -1,16 +1,15 @@
 /*
- * plot_view.hpp - a vplot figure rendered into a GPU texture, and optionally into an ImGui panel.
+ * plot_view.hpp - a vplot figure rendered into a GPU texture, and optionally an ImGui panel.
  *
- * vplot draws publication-quality figures behind a pure C ABI and can hand back either an RGBA
- * buffer or a PNG/PDF/SVG file. This wraps the first of those in the framework's texture lifetime
- * so a figure can be inspected live, and leaves the second exposed, so the figure the user just
- * resized on screen is the same object that gets written to the paper.
+ * vplot hands back either an RGBA buffer or a PNG/PDF/SVG file. This wraps the first in the
+ * framework's texture lifetime and leaves the second exposed, so the figure resized on screen is
+ * the one written to disk.
  *
- * The figure is owned here but deliberately NOT wrapped: plotting goes through the vpl C API
- * directly via figure(). That surface is several hundred entry points whose whole purpose is to
- * mirror matplotlib, and a hand-written facade over it would be a maintenance cost with no reader.
+ * The figure is owned but not wrapped - plotting goes through the vpl C API via figure(). That
+ * surface is several hundred entry points mirroring matplotlib; a facade over it would be
+ * maintenance with no reader.
  *
- * Compiled only under vrf_with_vplot; without it this header defines nothing.
+ * Compiled only under vrf_with_vplot.
  */
 #pragma once
 
@@ -36,13 +35,12 @@ namespace vrf
         // Size is in inches x dpi because that is how matplotlib - and therefore vplot - defines a
         // figure: the inch size is what a paper submission cares about, dpi only decides how many
         // pixels that becomes on screen. The defaults are matplotlib's own 6.4 x 4.8 at 100 dpi.
-        // No RenderDevice here on purpose: a figure that is only ever saved to PDF/PNG needs no
-        // GPU texture at all, and requiring a device to construct one would put a renderer in the
-        // way of a headless figure export. The texture is created lazily by Update(), which is
-        // where the device is actually needed.
-        // Overrides the face. vplot >= 0.1.1 embeds DejaVu Sans - the face matplotlib lays out
-        // against - so there is deliberately NO automatic search here: picking up a stock system
-        // font would replace the embedded one and silently change every figure's text metrics.
+        // No RenderDevice: a figure that is only saved to PDF/PNG needs no texture, and requiring
+        // a device here would put a renderer in the way of headless export. Update() creates the
+        // texture lazily, and that is where the device is needed.
+        // Overrides the face. vplot >= 0.1.1 embeds DejaVu Sans, the face matplotlib lays out
+        // against, so there is no automatic search: a stock system font would replace it and
+        // silently change every figure's text metrics.
         static void SetFontPath(const std::string& ttfPath);
 
         [[nodiscard]] static Expected<PlotView>
@@ -54,14 +52,14 @@ namespace vrf
         PlotView(const PlotView&)            = delete;
         PlotView& operator=(const PlotView&) = delete;
 
-        // The figure to plot into. Anything drawn through it needs a MarkDirty() to reach the
-        // screen - vplot has no change notification, and re-rendering every frame would mean a
-        // full software rasterisation plus a texture upload per frame for a static plot.
+        // The figure to plot into. Anything drawn through it needs MarkDirty() to reach the
+        // screen: vplot has no change notification, and re-rendering unconditionally would cost a
+        // software rasterisation plus a texture upload every frame for a static plot.
         [[nodiscard]] VplFigure* figure() const noexcept { return m_figure; }
         void                     MarkDirty() noexcept { m_dirty = true; }
 
-        // Both preserve everything already plotted (vplFigureSetSizeInches / SetDpi re-lay-out
-        // the existing artists), so a resize is not a reason to rebuild the figure.
+        // Both preserve what is already plotted - vplFigureSetSizeInches / SetDpi re-lay-out the
+        // existing artists - so a resize is not a reason to rebuild the figure.
         Expected<void> SetSizeInches(double widthInches, double heightInches);
         Expected<void> SetDpi(double dpi);
 
@@ -78,9 +76,8 @@ namespace vrf
         Expected<void> Save(const std::string& path, VplFormat format = VplFormat_Auto, double dpi = 0.0) const;
 
 #ifdef VRF_WITH_IMGUI
-        // Draws the figure at its natural pixel size. With fitToContentRegion the figure is first
-        // resized (in inches, at the current dpi) to whatever room the surrounding window gives it,
-        // which is what makes a plot panel behave like every other resizable ImGui child.
+        // Draws the figure at its natural pixel size. With fitToContentRegion it is first resized
+        // (in inches, at the current dpi) to the room the surrounding window gives it.
         void DrawImGui(RenderDevice& device, bool fitToContentRegion = true);
 #endif
 

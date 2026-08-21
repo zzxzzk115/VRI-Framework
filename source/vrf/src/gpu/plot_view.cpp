@@ -18,8 +18,7 @@ namespace vrf
 {
     namespace
     {
-        // vplot reports the detail for a failure per thread, so the message is only meaningful if
-        // it is read before the next vpl call on this thread.
+        // vplot's failure detail is per thread and only valid until the next vpl call on it.
         [[nodiscard]] Error PlotError(const VplResult result, const char* what)
         {
             return Error {VriResult_Failure,
@@ -126,8 +125,7 @@ namespace vrf
             return std::unexpected(Error {VriResult_InvalidArgument, "plot view: figure has zero pixel size"});
         }
 
-        // Ask vplot for the size rather than computing width * height * 4: the required size is
-        // the library's to define, and querying it with a null buffer is what the C ABI documents.
+        // Query the size rather than computing width * height * 4: a null buffer asks for it.
         size_t required = 0;
         if (const auto r = vplFigureRenderRGBA(m_figure, nullptr, 0, &required);
             r != VplResult_Success && r != VplResult_BufferTooSmall)
@@ -141,8 +139,7 @@ namespace vrf
             return std::unexpected(PlotError(r, "vplFigureRenderRGBA"));
         }
 
-        // Row 0 is the top row on vplot's side, which is what a sampled 2D texture expects, so
-        // there is no flip here and none needed downstream.
+        // Row 0 is the top row on vplot's side, which is what a sampled 2D texture expects.
         Texture cpu;
         cpu.name   = "vplot figure";
         cpu.width  = width;
@@ -156,8 +153,7 @@ namespace vrf
             return std::unexpected(uploaded.error());
         }
 
-        // The previous texture is released only now, so a figure that fails to re-render keeps
-        // showing the last good one instead of blinking out.
+        // Released only now: a figure that fails to re-render keeps showing the last good one.
         m_gpu    = std::move(uploaded.value());
         m_width  = width;
         m_height = height;
@@ -172,8 +168,8 @@ namespace vrf
         desc.format     = format;
         desc.dpi        = dpi;
 
-        // A zero dpi with an inferred format is exactly the "infer everything from the path" case
-        // the C ABI documents as desc = NULL, so pass NULL rather than a struct of zeroes.
+        // Zero dpi with an inferred format is the "infer everything from the path" case the C ABI
+        // spells as desc = NULL.
         const VplSaveDesc* descPtr = (format == VplFormat_Auto && dpi == 0.0) ? nullptr : &desc;
         if (const auto r = vplFigureSaveFig(m_figure, path.c_str(), descPtr); r != VplResult_Success)
         {
@@ -191,9 +187,8 @@ namespace vrf
             double       dpi   = 0.0;
             if (vplFigureGetDpi(m_figure, &dpi) == VplResult_Success && dpi > 0.0)
             {
-                // Round to whole pixels before converting back to inches. Without this the figure
-                // is resized every frame by a sub-pixel amount, and every resize re-rasterises and
-                // re-uploads - a static plot would then cost a blocking staging submit per frame.
+                // Whole pixels before converting back to inches: a sub-pixel wobble resizes the
+                // figure every frame, and every resize re-rasterises and re-uploads.
                 const auto targetW = static_cast<uint32_t>(std::max(1.0f, std::floor(avail.x)));
                 const auto targetH = static_cast<uint32_t>(std::max(1.0f, std::floor(avail.y)));
                 if (targetW != m_width || targetH != m_height)
