@@ -36,8 +36,24 @@ namespace vrf
         // Size is in inches x dpi because that is how matplotlib - and therefore vplot - defines a
         // figure: the inch size is what a paper submission cares about, dpi only decides how many
         // pixels that becomes on screen. The defaults are matplotlib's own 6.4 x 4.8 at 100 dpi.
+        // No RenderDevice here on purpose: a figure that is only ever saved to PDF/PNG needs no
+        // GPU texture at all, and requiring a device to construct one would put a renderer in the
+        // way of a headless figure export. The texture is created lazily by Update(), which is
+        // where the device is actually needed.
+        // vplot SKIPS text rather than failing when it has no font, so a figure with no font set
+        // renders its bars and axes perfectly and silently loses every label - which looks like a
+        // working plot until someone reads it. Create() calls EnsureFont() for that reason.
+        //
+        // Point this at a .ttf to choose the face; DejaVu Sans is what matplotlib uses and what
+        // vplot ships in assets/fonts.
+        static void SetFontPath(const std::string& ttfPath);
+        // Picks the first readable candidate: $VRF_VPLOT_FONT, assets/fonts/DejaVuSans.ttf beside
+        // the working directory, then the platform's stock faces. Returns false when none exist,
+        // in which case figures draw without text. Runs once per process.
+        static bool EnsureFont();
+
         [[nodiscard]] static Expected<PlotView>
-        Create(RenderDevice& device, double widthInches = 6.4, double heightInches = 4.8, double dpi = 100.0);
+        Create(double widthInches = 6.4, double heightInches = 4.8, double dpi = 100.0);
 
         ~PlotView();
         PlotView(PlotView&&) noexcept;
