@@ -145,6 +145,15 @@ namespace vrf
 
             return std::unique_ptr<Window>(std::make_unique<WindowSDL3>(window, desc.title));
         }
+
+        Expected<VriWindowHandle> ForeignWindowHandleSDL3(void* platformHandle)
+        {
+            const auto  id     = static_cast<SDL_WindowID>(reinterpret_cast<uintptr_t>(platformHandle));
+            SDL_Window* window = SDL_GetWindowFromID(id);
+            if (window == nullptr)
+                return MakeError("no SDL window for that id");
+            return vriWindowHandleFromSDL3(window);
+        }
     } // namespace detail
 } // namespace vrf
 
