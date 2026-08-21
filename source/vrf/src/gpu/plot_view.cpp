@@ -3,6 +3,8 @@
 #ifdef VRF_WITH_VPLOT
 
 #include <algorithm>
+#include <cstdlib>
+#include <filesystem>
 #include <cmath>
 #include <utility>
 
@@ -27,9 +29,63 @@ namespace vrf
         }
     } // namespace
 
-    Expected<PlotView>
-    PlotView::Create(RenderDevice& device, const double widthInches, const double heightInches, const double dpi)
+    void PlotView::SetFontPath(const std::string& ttfPath)
     {
+        if (const auto r = vplSetFontPath(ttfPath.c_str()); r != VplResult_Success)
+        {
+            LogWarning("plot view: font {} rejected: {}", ttfPath, vplResultToString(r));
+        }
+    }
+
+    bool PlotView::EnsureFont()
+    {
+        static const bool resolved = [] {
+            std::vector<std::string> candidates;
+            if (const char* env = std::getenv("VRF_VPLOT_FONT"); env != nullptr && *env != 0)
+            {
+                candidates.emplace_back(env);
+            }
+            // Beside the executable's working directory first: an app that ships vplot's DejaVu
+            // gets matplotlib's exact face, which is the point of matching its rendering.
+            candidates.emplace_back("assets/fonts/DejaVuSans.ttf");
+            candidates.emplace_back("assets/DejaVuSans.ttf");
+#if defined(_WIN32)
+            candidates.emplace_back("C:/Windows/Fonts/DejaVuSans.ttf");
+            candidates.emplace_back("C:/Windows/Fonts/segoeui.ttf");
+            candidates.emplace_back("C:/Windows/Fonts/arial.ttf");
+#elif defined(__APPLE__)
+            candidates.emplace_back("/System/Library/Fonts/Supplemental/DejaVuSans.ttf");
+            candidates.emplace_back("/System/Library/Fonts/Supplemental/Arial.ttf");
+            candidates.emplace_back("/Library/Fonts/Arial.ttf");
+#else
+            candidates.emplace_back("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf");
+            candidates.emplace_back("/usr/share/fonts/TTF/DejaVuSans.ttf");
+            candidates.emplace_back("/usr/share/fonts/dejavu/DejaVuSans.ttf");
+#endif
+            for (const std::string& candidate : candidates)
+            {
+                std::error_code ec;
+                if (!std::filesystem::exists(candidate, ec))
+                {
+                    continue;
+                }
+                if (vplSetFontPath(candidate.c_str()) == VplResult_Success)
+                {
+                    LogInfo("plot view: using font {}", candidate);
+                    return true;
+                }
+            }
+            LogWarning("plot view: no usable font found - figures will draw without any text. Set "
+                       "VRF_VPLOT_FONT to a .ttf, or ship one at assets/fonts/DejaVuSans.ttf.");
+            return false;
+        }();
+        return resolved;
+    }
+
+    Expected<PlotView> PlotView::Create(const double widthInches, const double heightInches, const double dpi)
+    {
+        EnsureFont();
+
         VplFigureDesc desc {};
         desc.structSize   = sizeof(VplFigureDesc);
         desc.widthInches  = widthInches;
@@ -44,13 +100,8 @@ namespace vrf
 
         PlotView view;
         view.m_figure = figure;
-
-        // Render once up front so the view owns a texture before the first frame draws it: an
-        // ImGui::Image with a null ImTextureID is not a benign no-op on every backend.
-        if (auto uploaded = view.Update(device); !uploaded)
-        {
-            return std::unexpected(uploaded.error());
-        }
+        // Left dirty and untextured: DrawImGui() calls Update() before it reaches ImGui::Image,
+        // and a save-only caller never needs the texture.
         return view;
     }
 
