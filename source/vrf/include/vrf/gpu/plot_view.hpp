@@ -40,17 +40,10 @@ namespace vrf
         // GPU texture at all, and requiring a device to construct one would put a renderer in the
         // way of a headless figure export. The texture is created lazily by Update(), which is
         // where the device is actually needed.
-        // vplot SKIPS text rather than failing when it has no font, so a figure with no font set
-        // renders its bars and axes perfectly and silently loses every label - which looks like a
-        // working plot until someone reads it. Create() calls EnsureFont() for that reason.
-        //
-        // Point this at a .ttf to choose the face; DejaVu Sans is what matplotlib uses and what
-        // vplot ships in assets/fonts.
+        // Overrides the face. vplot >= 0.1.1 embeds DejaVu Sans - the face matplotlib lays out
+        // against - so there is deliberately NO automatic search here: picking up a stock system
+        // font would replace the embedded one and silently change every figure's text metrics.
         static void SetFontPath(const std::string& ttfPath);
-        // Picks the first readable candidate: $VRF_VPLOT_FONT, assets/fonts/DejaVuSans.ttf beside
-        // the working directory, then the platform's stock faces. Returns false when none exist,
-        // in which case figures draw without text. Runs once per process.
-        static bool EnsureFont();
 
         [[nodiscard]] static Expected<PlotView>
         Create(double widthInches = 6.4, double heightInches = 4.8, double dpi = 100.0);
