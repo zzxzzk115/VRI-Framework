@@ -18,8 +18,7 @@ namespace
 
     vrf::ResolvedShader ResolveFixture(const vrf::ShaderLibrary& lib, uint32_t extraTexture)
     {
-        auto shader = lib.Resolve("reflection_fixture", vrf::ShaderStage::Compute,
-                                  {{"EXTRA_TEXTURE", extraTexture}});
+        auto shader = lib.Resolve("reflection_fixture", vrf::ShaderStage::Compute, {{"EXTRA_TEXTURE", extraTexture}});
         REQUIRE_MESSAGE(shader.has_value(), (shader ? "" : shader.error().message));
         return *shader;
     }
@@ -106,7 +105,7 @@ TEST_CASE("shader reflection: the table is the BASE variant's, shared by every v
     auto lib = vrf::ShaderLibrary::LoadFromFile(kFixture);
     REQUIRE(lib.has_value());
 
-    const vrf::ResolvedShader base = ResolveFixture(*lib, 0); // declares t_Extra
+    const vrf::ResolvedShader base  = ResolveFixture(*lib, 0); // declares t_Extra
     const vrf::ResolvedShader gated = ResolveFixture(*lib, 1); // does not
     REQUIRE(base.reflection != nullptr);
     REQUIRE(gated.reflection != nullptr);

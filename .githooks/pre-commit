@@ -1,0 +1,34 @@
+#!/bin/sh
+# Run the same clang-format check CI runs, over the staged files only.
+#
+# CI's format job is the cheapest one it has and the one most likely to be the sole red X on an
+# otherwise green run - which is exactly how it stays red for days: the build passes, the failure
+# looks incidental, and nobody reruns it. Catching it here costs a second.
+#
+# Deliberately the SAME invocation as .github/workflows/ci.yml, so a pass here means a pass there:
+# clang-format --dry-run --Werror, over source/ examples/ tests/, on .cpp/.cc/.h/.hpp.
+#
+# Enable with:  git config core.hooksPath .githooks
+# Bypass once with --no-verify if you genuinely need to commit unformatted work.
+
+if ! command -v clang-format >/dev/null 2>&1; then
+    echo "pre-commit: clang-format not found, skipping the format check." >&2
+    echo "            CI pins 20.1.0 (pip install clang-format==20.1.0)." >&2
+    exit 0
+fi
+
+# Staged files only, filtered to the directories and extensions CI looks at. Deleted files are
+# excluded (--diff-filter=d) or clang-format would fail on a path that no longer exists.
+files=$(git diff --cached --name-only --diff-filter=d |
+        grep -E '^(source|examples|tests)/' |
+        grep -E '\.(cpp|cc|h|hpp)$')
+
+[ -z "$files" ] && exit 0
+
+if ! echo "$files" | xargs clang-format --dry-run --Werror; then
+    echo "" >&2
+    echo "pre-commit: formatting differs from .clang-format. Fix with:" >&2
+    echo "  echo \"\$(git diff --cached --name-only --diff-filter=d | grep -E '^(source|examples|tests)/' | grep -E '\\.(cpp|cc|h|hpp)\$')\" | xargs clang-format -i" >&2
+    echo "then re-stage. A local clang-format older or newer than CI's 20.1.0 can disagree." >&2
+    exit 1
+fi
