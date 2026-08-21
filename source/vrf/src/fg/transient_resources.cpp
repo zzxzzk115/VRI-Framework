@@ -38,10 +38,114 @@ namespace
         return h;
     }
 
+    // Bytes per texel, or per 4x4 block for the compressed formats (blockDim comes back as 4).
+    // 0 for Unknown: a desc that cannot be sized should contribute nothing rather than a
+    // plausible-looking lie.
+    [[nodiscard]] uint32_t texelSize(const VriFormat format, uint32_t& blockDim)
+    {
+        blockDim = 1;
+        switch (format)
+        {
+            case VriFormat_R8_UNORM:
+            case VriFormat_R8_SNORM:
+            case VriFormat_R8_UINT:
+            case VriFormat_R8_SINT:
+            case VriFormat_S8_UINT:
+                return 1;
+
+            case VriFormat_RG8_UNORM:
+            case VriFormat_RG8_SNORM:
+            case VriFormat_RG8_UINT:
+            case VriFormat_RG8_SINT:
+            case VriFormat_R16_UNORM:
+            case VriFormat_R16_SNORM:
+            case VriFormat_R16_UINT:
+            case VriFormat_R16_SINT:
+            case VriFormat_R16_SFLOAT:
+            case VriFormat_D16_UNORM:
+                return 2;
+
+            case VriFormat_RGBA8_UNORM:
+            case VriFormat_RGBA8_SRGB:
+            case VriFormat_RGBA8_UINT:
+            case VriFormat_RGBA8_SINT:
+            case VriFormat_BGRA8_UNORM:
+            case VriFormat_BGRA8_SRGB:
+            case VriFormat_RG16_UNORM:
+            case VriFormat_RG16_SNORM:
+            case VriFormat_RG16_UINT:
+            case VriFormat_RG16_SINT:
+            case VriFormat_RG16_SFLOAT:
+            case VriFormat_R32_UINT:
+            case VriFormat_R32_SINT:
+            case VriFormat_R32_SFLOAT:
+            case VriFormat_RGB10A2_UNORM:
+            case VriFormat_RG11B10_UFLOAT:
+            case VriFormat_D32_SFLOAT:
+            case VriFormat_D24_UNORM_S8_UINT:
+                return 4;
+
+            case VriFormat_RGBA16_UNORM:
+            case VriFormat_RGBA16_SNORM:
+            case VriFormat_RGBA16_UINT:
+            case VriFormat_RGBA16_SINT:
+            case VriFormat_RGBA16_SFLOAT:
+            case VriFormat_RG32_UINT:
+            case VriFormat_RG32_SINT:
+            case VriFormat_RG32_SFLOAT:
+            // Two planes plus padding wherever it is reported at all; 8 is the honest figure.
+            case VriFormat_D32_SFLOAT_S8_UINT:
+                return 8;
+
+            case VriFormat_RGB32_UINT:
+            case VriFormat_RGB32_SINT:
+            case VriFormat_RGB32_SFLOAT:
+                return 12;
+
+            case VriFormat_RGBA32_UINT:
+            case VriFormat_RGBA32_SINT:
+            case VriFormat_RGBA32_SFLOAT:
+                return 16;
+
+            case VriFormat_BC1_UNORM:
+            case VriFormat_BC4_UNORM:
+                blockDim = 4;
+                return 8;
+
+            case VriFormat_BC2_UNORM:
+            case VriFormat_BC3_UNORM:
+            case VriFormat_BC5_UNORM:
+            case VriFormat_BC6H_UFLOAT:
+            case VriFormat_BC7_UNORM:
+                blockDim = 4;
+                return 16;
+
+            // No default: a format added to VriFormat must be sized here, and the compiler is what
+            // should say so - not a stat that silently keeps reporting a number.
+            case VriFormat_Unknown:
+            case VriFormat_Count:
+            case VriFormat_MaxEnum:
+                break;
+        }
+        return 0;
+    }
+
     [[nodiscard]] uint64_t approximateSize(const vrf::fg::Texture::Desc& desc)
     {
-        // Rough: 4 bytes/texel + 1/3 mip overhead. Stats only, not allocation.
-        uint64_t size = uint64_t {desc.extent.width} * desc.extent.height * std::max(desc.depth, 1u) * 4;
+        // Sized from the FORMAT. This assumed 4 bytes/texel for everything until 2026-08-21, which
+        // halves every fp16 and 32-bit-pair target - and those are exactly what a deferred
+        // renderer's transients are, so the figure was ~2x low precisely where it mattered and the
+        // stat could not be used to reason about memory at all.
+        //
+        // Still approximate, and deliberately: no alignment or tiling padding, and the mip tail is
+        // the 1/3 geometric estimate rather than a walk of the chain. It is a budget readout, not
+        // an allocation.
+        uint32_t       blockDim = 1;
+        const uint64_t texel    = texelSize(desc.format, blockDim);
+        const uint64_t width    = (uint64_t {desc.extent.width} + blockDim - 1) / blockDim;
+        const uint64_t height   = (uint64_t {desc.extent.height} + blockDim - 1) / blockDim;
+
+        uint64_t size = width * height * std::max(desc.depth, 1u) * texel;
         if (desc.numMipLevels > 1)
         {
             size += size / 3;
