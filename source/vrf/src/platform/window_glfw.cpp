@@ -101,6 +101,14 @@ namespace vrf
 
             return std::unique_ptr<Window>(std::make_unique<WindowGLFW>(window, desc.title));
         }
+
+        Expected<VriWindowHandle> ForeignWindowHandleGLFW(void* platformHandle)
+        {
+            auto* window = static_cast<GLFWwindow*>(platformHandle);
+            if (window == nullptr)
+                return MakeError("null GLFW window");
+            return vriWindowHandleFromGLFW(window);
+        }
     } // namespace detail
 } // namespace vrf
 

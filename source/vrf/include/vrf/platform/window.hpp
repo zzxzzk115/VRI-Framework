@@ -33,6 +33,13 @@ namespace vrf
         bool          resizable = true;
     };
 
+    // The native handle of a window this library did NOT create. ImGui's platform backend spawns
+    // its own OS windows for detached viewports, and a swapchain for one still needs a
+    // VriWindowHandle - but what the backend leaves in ImGuiViewport::PlatformHandle differs by
+    // backend: an SDL_WindowID for SDL3, a GLFWwindow* for GLFW. Resolving that is the one thing
+    // only the active window backend can do.
+    [[nodiscard]] Expected<VriWindowHandle> ForeignWindowHandle(WindowBackend backend, void* platformHandle);
+
     class Window
     {
     public:

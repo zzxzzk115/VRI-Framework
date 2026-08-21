@@ -23,8 +23,12 @@
 
 #include "vrf/core/math.hpp"
 #include "vrf/core/result.hpp"
+#include "vrf/platform/window.hpp"
 
 struct ImDrawData; // Dear ImGui (global namespace)
+
+struct ImGuiViewport;
+struct ImVec2;
 
 namespace vrf
 {
@@ -70,13 +74,44 @@ namespace vrf
         // Windows a black window after aggressive resizes).
         void FreeTexture(VriDescriptor* textureView);
 
+        // Render ImGui's detached OS windows. ImGui's platform backend creates the windows; this
+        // gives each one a swapchain and the command machinery to draw into it, through
+        // ImGuiPlatformIO's Renderer_* hooks that RenderPlatformWindowsDefault() drives.
+        //
+        // Without it, setting ImGuiConfigFlags_ViewportsEnable produces OS windows nothing renders
+        // to. Call once after the flag is set, then UpdatePlatformWindows() +
+        // RenderPlatformWindowsDefault() once per frame after the main window's present.
+        //
+        // `backend` must match the window backend ImGui's platform layer is driving, since what it
+        // leaves in ImGuiViewport::PlatformHandle differs between SDL3 and GLFW.
+        [[nodiscard]] Expected<void> EnableViewports(WindowBackend backend, VriFormat swapchainFormat);
+
+        // Undoes EnableViewports: waits the device idle and tears down every secondary viewport.
+        // The destructor calls it, so this is only needed to disable viewports while running.
+        void DisableViewports() noexcept;
+
     private:
         void Reset() noexcept;
+
+        // ImGuiPlatformIO's Renderer_* hooks. Free-function signatures, so they reach the backend
+        // through s_viewportOwner.
+        static void ViewportCreate(ImGuiViewport*);
+        static void ViewportDestroy(ImGuiViewport*);
+        static void ViewportSetSize(ImGuiViewport*, ImVec2);
+        static void ViewportRender(ImGuiViewport*, void*);
+        static void ViewportSwap(ImGuiViewport*, void*);
 
         RenderDevice*     m_device = nullptr;
         VriImguiInterface m_api {};
         VriImgui*         m_gui      = nullptr;
         VriDescriptor*    m_fontView = nullptr;
+
+        // Non-null only while viewports are enabled; the Renderer_* callbacks are free functions
+        // and reach the backend through this.
+        static ImGuiBackend* s_viewportOwner;
+        WindowBackend        m_viewportBackend {};
+        VriFormat            m_viewportFormat {VriFormat_Unknown};
+        bool                 m_viewportsEnabled = false;
 
         bool                             m_hasData = false;
         std::vector<VriImguiVertex>      m_vertices;
