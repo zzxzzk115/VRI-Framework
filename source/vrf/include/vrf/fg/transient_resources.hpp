@@ -35,8 +35,17 @@ namespace vrf::fg
 
         struct MemoryStats
         {
-            uint64_t textures {0}; // approximate, bytes
+            uint64_t textures {0}; // approximate, bytes - everything the POOL holds
             uint64_t buffers {0};
+            // What was actually alive at once. acquire/release ARE the framegraph's first and last
+            // use of a resource, so tracking the running sum between them is the peak concurrent
+            // working set with no lifetime analysis needed. The gap between this and the pool
+            // total above is the entire prize aliasing could win: pooling already recycles a desc
+            // across passes, so only descs that DIFFER can be overlapped, and that is the gap.
+            uint64_t texturesPeak {0}; // max concurrent, previous complete frame
+            uint64_t buffersPeak {0};
+            uint64_t texturesLive {0}; // right now
+            uint64_t buffersLive {0};
         };
         [[nodiscard]] MemoryStats getStats() const;
 
@@ -61,6 +70,11 @@ namespace vrf::fg
         RenderDevice& m_device;
         uint32_t      m_framesInFlight;
         uint64_t      m_frame {0};
+
+        // Bytes currently acquired, the running max within the frame being recorded, and the
+        // completed frame's max. Approximate in exactly the way approximateSize() is.
+        uint64_t m_liveTextures {0}, m_peakTextures {0}, m_lastPeakTextures {0};
+        uint64_t m_liveBuffers {0}, m_peakBuffers {0}, m_lastPeakBuffers {0};
 
         template<class T>
         struct Pool
