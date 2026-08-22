@@ -1,5 +1,6 @@
 #include "vrf/fg/transient_resources.hpp"
 
+#include <algorithm>
 #include <cassert>
 
 #include "vrf/core/log.hpp"
@@ -203,12 +204,22 @@ namespace vrf::fg
         {
             stats.buffers += b->GetSize();
         }
+        stats.texturesPeak = m_lastPeakTextures;
+        stats.buffersPeak  = m_lastPeakBuffers;
+        stats.texturesLive = m_liveTextures;
+        stats.buffersLive  = m_liveBuffers;
         return stats;
     }
 
     void TransientResources::update()
     {
         ++m_frame;
+        // Close the peak window on the frame that just ended. Seeded with what is still live
+        // rather than 0, so a resource held across the boundary keeps counting.
+        m_lastPeakTextures = m_peakTextures;
+        m_lastPeakBuffers  = m_peakBuffers;
+        m_peakTextures     = m_liveTextures;
+        m_peakBuffers      = m_liveBuffers;
         heartbeat(m_textures, m_frame, kMaxIdleFrames);
         heartbeat(m_buffers, m_frame, kMaxIdleFrames);
     }
@@ -226,6 +237,11 @@ namespace vrf::fg
         // Device-local textures are only touched by GPU commands on one queue;
         // barriers order cross-frame reuse, so pooled entries are reusable
         // immediately.
+        // Live accounting brackets the framegraph's first and last use of the resource, so it
+        // is charged whether the texture came from the pool or was created here.
+        m_liveTextures += approximateSize(desc);
+        m_peakTextures = std::max(m_peakTextures, m_liveTextures);
+
         if (!group.empty())
         {
             auto* texture = group.back().resource;
@@ -245,6 +261,8 @@ namespace vrf::fg
 
     void TransientResources::releaseTexture(const Texture::Desc& desc, Texture* texture)
     {
+        const uint64_t size = approximateSize(desc);
+        m_liveTextures      = m_liveTextures > size ? m_liveTextures - size : 0;
         m_textures.entryGroups[hashDesc(desc)].push_back({texture, m_frame});
     }
 
@@ -257,6 +275,9 @@ namespace vrf::fg
         // races the GPU still reading the previous frame - hold them back a
         // full frames-in-flight window. Device-local buffers are ordered by
         // barriers like textures.
+        m_liveBuffers += desc.dataSize();
+        m_peakBuffers = std::max(m_peakBuffers, m_liveBuffers);
+
         const bool     hostVisible = desc.type == BufferType::UniformBuffer;
         const uint64_t minAge      = hostVisible ? m_framesInFlight : 0;
         for (auto it = group.begin(); it != group.end(); ++it)
@@ -281,6 +302,8 @@ namespace vrf::fg
 
     void TransientResources::releaseBuffer(const Buffer::Desc& desc, Buffer* buffer)
     {
+        const uint64_t size = desc.dataSize();
+        m_liveBuffers       = m_liveBuffers > size ? m_liveBuffers - size : 0;
         m_buffers.entryGroups[hashDesc(desc)].push_back({buffer, m_frame});
     }
 } // namespace vrf::fg
