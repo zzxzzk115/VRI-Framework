@@ -89,6 +89,17 @@ namespace vrf
         // after it the structure traces as before but can no longer be rebuilt.
         void ReleaseBuildScratch();
 
+        // Shrink a BUILT structure to the size it actually needs. A builder sizes conservatively
+        // from the geometry counts; the real figure is only known once the tree exists, and on a
+        // large static scene the difference is hundreds of megabytes.
+        //
+        // Requires the build to have used VriAccelerationStructureBuild_AllowCompaction. Runs its
+        // own submits and waits on them, so this belongs at load time, not in a frame. On success
+        // the handle is REPLACED - anything holding the old device address (a TLAS instance
+        // record) must be rebuilt or built after this - and the result carries no build scratch,
+        // so it can be traced but not rebuilt.
+        [[nodiscard]] Expected<void> Compact(RenderDevice&);
+
         [[nodiscard]] uint64_t                  DeviceAddress() const;
         [[nodiscard]] VriAccelerationStructure* Handle() const noexcept { return m_as; }
         [[nodiscard]] explicit                  operator bool() const noexcept { return m_as != nullptr; }

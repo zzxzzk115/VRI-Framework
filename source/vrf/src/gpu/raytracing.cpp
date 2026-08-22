@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "vrf/gpu/render_device.hpp"
+#include "vrf/gpu/upload.hpp"
 
 namespace vrf
 {
@@ -162,6 +163,78 @@ namespace vrf
         assert(m_as);
         const VriBuildAccelerationStructureDesc build {.dst = m_as, .geometry = &m_desc};
         m_api.CmdBuildAccelerationStructure(cmd, &build);
+    }
+
+    Expected<void> Blas::Compact(RenderDevice& device)
+    {
+        if (m_as == nullptr)
+            return std::unexpected(Error {VriResult_InvalidArgument, "Blas::Compact: nothing built"});
+        if (m_api.CmdWriteAccelerationStructureCompactedSize == nullptr ||
+            m_api.CreateAccelerationStructureCompacted == nullptr || m_api.CmdCopyAccelerationStructure == nullptr)
+            return std::unexpected(Error {VriResult_Unsupported, "Blas::Compact: backend has no compaction"});
+
+        const VriCoreInterface& core = device.Core();
+
+        // The size lands in a device buffer first: the query writes from the GPU timeline, and a
+        // host-visible destination would be a mapped write racing the copy it is meant to report.
+        VriBufferDesc sizeDesc {};
+        sizeDesc.size           = sizeof(uint64_t);
+        sizeDesc.usage          = VriBufferUsage_StorageBuffer | VriBufferUsage_TransferSrc;
+        sizeDesc.memoryLocation = VriMemoryLocation_Device;
+        VriBuffer* sizeBuffer   = nullptr;
+        if (const auto r = core.CreateBuffer(device.Handle(), &sizeDesc, &sizeBuffer); r != VriResult_Success)
+            return std::unexpected(Error {r, "Blas::Compact: size buffer"});
+
+        VriBufferDesc readDesc {};
+        readDesc.size           = sizeof(uint64_t);
+        readDesc.usage          = VriBufferUsage_TransferDst;
+        readDesc.memoryLocation = VriMemoryLocation_HostReadback;
+        VriBuffer* readBuffer   = nullptr;
+        if (const auto r = core.CreateBuffer(device.Handle(), &readDesc, &readBuffer); r != VriResult_Success)
+        {
+            core.DestroyBuffer(sizeBuffer);
+            return std::unexpected(Error {r, "Blas::Compact: readback buffer"});
+        }
+
+        ImmediateSubmit(device, [&](VriCommandBuffer* cmd) {
+            m_api.CmdWriteAccelerationStructureCompactedSize(cmd, m_as, sizeBuffer, 0);
+            VriBufferBarrierDesc barrier {};
+            barrier.buffer        = sizeBuffer;
+            barrier.before.access = VriAccess_ShaderResourceStorageWrite;
+            barrier.before.stages = VriPipelineStage_AccelerationStructureBuild;
+            barrier.after.access  = VriAccess_CopySourceRead;
+            barrier.after.stages  = VriPipelineStage_Transfer;
+            VriBarrierGroupDesc group {};
+            group.buffers   = &barrier;
+            group.bufferNum = 1;
+            core.CmdBarrier(cmd, &group);
+            const VriBufferCopyDesc copy {.srcOffset = 0, .dstOffset = 0, .size = sizeof(uint64_t)};
+            core.CmdCopyBuffer(cmd, readBuffer, sizeBuffer, &copy);
+        });
+
+        uint64_t    compactedSize = 0;
+        const void* mapped        = core.MapBuffer(readBuffer, 0, sizeof(uint64_t));
+        if (mapped != nullptr)
+            std::memcpy(&compactedSize, mapped, sizeof compactedSize);
+        core.UnmapBuffer(readBuffer);
+        core.DestroyBuffer(readBuffer);
+        core.DestroyBuffer(sizeBuffer);
+
+        if (compactedSize == 0)
+            return std::unexpected(Error {VriResult_Failure, "Blas::Compact: compacted size query returned 0"});
+
+        VriAccelerationStructure* compacted = nullptr;
+        if (const auto r = m_api.CreateAccelerationStructureCompacted(
+                device.Handle(), VriAccelerationStructureType_BottomLevel, compactedSize, &compacted);
+            r != VriResult_Success)
+            return std::unexpected(Error {r, "Blas::Compact: compacted destination"});
+
+        ImmediateSubmit(
+            device, [&](VriCommandBuffer* cmd) { m_api.CmdCopyAccelerationStructure(cmd, compacted, m_as, VRI_TRUE); });
+
+        m_api.DestroyAccelerationStructure(m_as);
+        m_as = compacted;
+        return {};
     }
 
     void Blas::ReleaseBuildScratch()
