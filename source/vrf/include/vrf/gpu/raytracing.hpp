@@ -82,6 +82,13 @@ namespace vrf
 
         void CmdBuild(VriCommandBuffer*);
 
+        // Free the one-shot build scratch, which CreateAccelerationStructure allocates up front
+        // and otherwise holds for the object's whole life. It is not small - a 462-geometry BLAS
+        // over 8.5 M vertices measured 999.7 MB of structure against 735.1 MB of scratch - and a
+        // static scene builds once. ONLY after the submission carrying CmdBuild has completed;
+        // after it the structure traces as before but can no longer be rebuilt.
+        void ReleaseBuildScratch();
+
         [[nodiscard]] uint64_t                  DeviceAddress() const;
         [[nodiscard]] VriAccelerationStructure* Handle() const noexcept { return m_as; }
         [[nodiscard]] explicit                  operator bool() const noexcept { return m_as != nullptr; }
@@ -118,6 +125,13 @@ namespace vrf
         void SetInstances(const AsInstance* instances, uint32_t count);
 
         void CmdBuild(VriCommandBuffer*);
+
+        // Free the one-shot build scratch, which CreateAccelerationStructure allocates up front
+        // and otherwise holds for the object's whole life. It is not small - a 462-geometry BLAS
+        // over 8.5 M vertices measured 999.7 MB of structure against 735.1 MB of scratch - and a
+        // static scene builds once. ONLY after the submission carrying CmdBuild has completed;
+        // after it the structure traces as before but can no longer be rebuilt.
+        void ReleaseBuildScratch();
 
         // Descriptor for binding (VriDescriptorType_AccelerationStructure);
         // cached, destroyed with the Tlas.
