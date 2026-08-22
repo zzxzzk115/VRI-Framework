@@ -164,6 +164,12 @@ namespace vrf
         m_api.CmdBuildAccelerationStructure(cmd, &build);
     }
 
+    void Blas::ReleaseBuildScratch()
+    {
+        if (m_as != nullptr && m_api.ReleaseAccelerationStructureScratch != nullptr)
+            m_api.ReleaseAccelerationStructureScratch(m_as);
+    }
+
     uint64_t Blas::DeviceAddress() const
     {
         assert(m_as);
@@ -270,6 +276,12 @@ namespace vrf
         assert(m_as);
         const VriBuildAccelerationStructureDesc build {.dst = m_as, .geometry = &m_desc};
         m_api.CmdBuildAccelerationStructure(cmd, &build);
+    }
+
+    void Tlas::ReleaseBuildScratch()
+    {
+        if (m_as != nullptr && m_api.ReleaseAccelerationStructureScratch != nullptr)
+            m_api.ReleaseAccelerationStructureScratch(m_as);
     }
 
     VriDescriptor* Tlas::Descriptor()
