@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cstdio>
 
 #include "vrf/core/log.hpp"
 #include "vrf/gpu/render_device.hpp"
@@ -249,6 +250,10 @@ namespace vrf::fg
             return texture;
         }
 
+        // Name it by its SHAPE, not by a caller-supplied string: the pool keys on the desc hash
+        // and recycles one texture across many passes, so a pass name would be a lie the moment it
+        // was reused. Shape is what a memory listing needs anyway - it turns "80 unnamed objects,
+        // 2993 MB" into a line per distinct target size.
         auto created = Texture::Create(m_device, desc);
         if (!created)
         {
@@ -256,6 +261,17 @@ namespace vrf::fg
             return nullptr;
         }
         m_textures.resources.push_back(std::make_unique<Texture>(std::move(*created)));
+        {
+            char name[64];
+            std::snprintf(name,
+                          sizeof name,
+                          "fg %ux%u fmt%d%s",
+                          desc.extent.width,
+                          desc.extent.height,
+                          static_cast<int>(desc.format),
+                          desc.numMipLevels > 1 ? " +mips" : "");
+            m_device.Core().SetDebugName(m_textures.resources.back()->Handle(), name);
+        }
         return m_textures.resources.back().get();
     }
 

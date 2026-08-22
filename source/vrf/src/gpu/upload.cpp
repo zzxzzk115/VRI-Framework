@@ -212,8 +212,14 @@ namespace vrf
         const uint64_t vbSize     = vertices.size();
         const uint64_t ibSize     = mesh.indices.size() * sizeof(uint32_t);
 
-        const VriBufferUsageFlags rtUsage = rtAccelInput ? VriBufferUsage_AccelerationBuildInput : 0;
-        auto vertexBuffer                 = CreateDeviceBuffer(device, vbSize, VriBufferUsage_VertexBuffer | rtUsage);
+        // StorageBuffer alongside AccelerationBuildInput: a ray-traced hit shader reads the same
+        // vertices and indices the raster path draws, as a structured buffer. Without this the
+        // caller has to upload a SECOND, byte-identical copy just to get an SRV over it - measured
+        // at 521 MB of vertices and 154 MB of indices duplicated on an 8.5 M-vertex scene, on a
+        // card where the working set was already near the VRAM budget.
+        const VriBufferUsageFlags rtUsage =
+            rtAccelInput ? (VriBufferUsage_AccelerationBuildInput | VriBufferUsage_StorageBuffer) : 0;
+        auto vertexBuffer = CreateDeviceBuffer(device, vbSize, VriBufferUsage_VertexBuffer | rtUsage);
         if (!vertexBuffer)
             return std::unexpected(vertexBuffer.error());
         VriBuffer* indexBuffer = nullptr;
