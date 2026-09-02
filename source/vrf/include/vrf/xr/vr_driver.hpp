@@ -99,6 +99,13 @@ namespace vrf::xr
         [[nodiscard]] const std::string& SystemName() const;           // "" when unavailable
         [[nodiscard]] Extent2D           RecommendedEyeExtent() const; // {0,0} when unavailable
 
+        // Which runtime answered the probe. Provenance for anything captured
+        // from the rig: the same headset hands out a different frustum under a
+        // different runtime. "" / 0 when unavailable.
+        [[nodiscard]] const std::string& RuntimeName() const;
+        [[nodiscard]] const std::string& RuntimeVersion() const;
+        [[nodiscard]] uint32_t           VendorId() const;
+
     private:
         struct Impl;
         std::unique_ptr<Impl> m_impl;

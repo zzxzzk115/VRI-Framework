@@ -54,6 +54,9 @@ namespace vrf::xr
         ::XrInstance instance {XR_NULL_HANDLE};
         ::XrSystemId systemId {XR_NULL_SYSTEM_ID};
         std::string  systemName;
+        std::string  runtimeName;
+        std::string  runtimeVersion;
+        uint32_t     vendorId {0};
         Extent2D     recommendedEyeExtent {};
 
         PFN_xrCreateVulkanInstanceKHR     createInstance {nullptr};
@@ -162,6 +165,21 @@ namespace vrf::xr
             if (XR_SUCCEEDED(xrGetSystemProperties(impl->instance, impl->systemId, &props)))
             {
                 impl->systemName = props.systemName;
+                impl->vendorId   = props.vendorId;
+            }
+        }
+
+        // Which runtime answered matters as much as which headset did: the same
+        // device reports a different frustum under SteamVR than under its own
+        // runtime, and Pimax's parallel-projection toggle lives on that side.
+        {
+            XrInstanceProperties props {XR_TYPE_INSTANCE_PROPERTIES};
+            if (XR_SUCCEEDED(xrGetInstanceProperties(impl->instance, &props)))
+            {
+                impl->runtimeName    = props.runtimeName;
+                impl->runtimeVersion = std::to_string(XR_VERSION_MAJOR(props.runtimeVersion)) + "." +
+                                       std::to_string(XR_VERSION_MINOR(props.runtimeVersion)) + "." +
+                                       std::to_string(XR_VERSION_PATCH(props.runtimeVersion));
             }
         }
 
@@ -212,10 +230,12 @@ namespace vrf::xr
         impl->hooks.createDevice   = &Impl::HookCreateDevice;
         impl->hooks.userData       = impl.get();
 
-        LogInfo("xr: OpenXR system \"{}\" ({}x{} per eye)",
+        LogInfo("xr: OpenXR system \"{}\" ({}x{} per eye) on runtime \"{}\" {}",
                 impl->systemName,
                 impl->recommendedEyeExtent.width,
-                impl->recommendedEyeExtent.height);
+                impl->recommendedEyeExtent.height,
+                impl->runtimeName,
+                impl->runtimeVersion);
         return XrSystem {std::move(impl)};
     }
 
@@ -227,6 +247,9 @@ namespace vrf::xr
     ::XrSystemId XrSystem::SystemId() const { return m_impl->systemId; }
 
     const std::string& XrSystem::SystemName() const { return m_impl->systemName; }
+    const std::string& XrSystem::RuntimeName() const { return m_impl->runtimeName; }
+    const std::string& XrSystem::RuntimeVersion() const { return m_impl->runtimeVersion; }
+    uint32_t           XrSystem::VendorId() const { return m_impl->vendorId; }
 } // namespace vrf::xr
 
 #endif // VRF_WITH_OPENXR
