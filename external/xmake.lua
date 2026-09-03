@@ -9,7 +9,12 @@ local vri_configs = {
     d3d12  = has_config("vrf_backend_d3d12"),
     metal  = has_config("vrf_backend_metal"),
 }
-add_requires("vri v0.1.15", {configs = vri_configs})
+-- v0.1.16 adds Metal argument-buffer bindless: a descriptor set is promoted to a Metal 3
+-- argument buffer when it declares bindless intent or no longer fits the direct argument
+-- tables, so a material-texture array is no longer capped at Metal's 128-per-stage limit.
+-- VriDeviceDesc grew bindlessTextureMaxNum / bindlessSamplerMaxNum at the END of the struct
+-- (additive; existing offsets unchanged), which is why this is a pin move and nothing else.
+add_requires("vri v0.1.16", {configs = vri_configs})
 
 -- glm: math types used across the framework's public API.
 add_requires("glm")
