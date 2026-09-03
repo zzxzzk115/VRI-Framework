@@ -52,6 +52,18 @@ rule("vulkansdk")
 
             local lib_name = target:is_plat("windows") and util or "lib" .. util
             local lib_path = path.join(vulkansdk.linkdirs[1], lib_name .. suffix)
+
+            -- macOS: an absolute path in `links` is emitted as `-L<sdk>/lib -lvulkan`, and that
+            -- linkdir lands BEFORE the package linkdirs. The macOS Vulkan SDK also ships
+            -- libglslang.a / libSPIRV.a, so the SDK's copies then win `-lglslang` / `-lSPIRV`
+            -- over the glslang package's - and the SDK's SPIRV was built with ENABLE_OPT, so the
+            -- link dies on ~20 undefined spvtools:: symbols the package never asked for. Pass the
+            -- dylib's absolute path straight to the linker instead; no -L, nothing shadowed.
+            if target:is_plat("macosx") then
+                target:add("ldflags", lib_path, { force = true, public = true })
+                return
+            end
+
             target:add("links", lib_path, { public = true })
         end
     end)
