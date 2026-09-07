@@ -61,6 +61,15 @@ namespace vrf::xr
 
         [[nodiscard]] const std::string& SystemName() const;
 
+        // Runtime identity, for provenance in captured measurements: the same
+        // headset reports different frusta under different runtimes (Pimax's
+        // parallel-projection mode is a runtime setting, not a device one).
+        // Empty / zero when the query failed. OpenXR exposes no device serial
+        // number, so there is deliberately no accessor for one.
+        [[nodiscard]] const std::string& RuntimeName() const;
+        [[nodiscard]] const std::string& RuntimeVersion() const; // "major.minor.patch"
+        [[nodiscard]] uint32_t           VendorId() const;
+
     private:
         struct Impl;
         explicit XrSystem(std::unique_ptr<Impl> impl) noexcept;

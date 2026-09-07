@@ -22,7 +22,10 @@ namespace vrf::xr
         std::unique_ptr<SimStereoRig> sim;
         RenderDevice*                 device {nullptr};
         FrameStream*                  frames {nullptr};
-        std::string                   systemName;        // cached so SystemName() is valid without a session
+        std::string                   systemName;  // cached so SystemName() is valid without a session
+        std::string                   runtimeName; // ditto: probe-time identity outlives the session
+        std::string                   runtimeVersion;
+        uint32_t                      vendorId {0};
         Extent2D                      recommendedExtent; // {0,0} unless a headset was probed
 
         // Drain in-flight frames before recreating a rig / tearing down a session.
@@ -55,6 +58,9 @@ namespace vrf::xr
             {
                 driver.m_impl->system.emplace(std::move(*probed));
                 driver.m_impl->systemName        = driver.m_impl->system->SystemName();
+                driver.m_impl->runtimeName       = driver.m_impl->system->RuntimeName();
+                driver.m_impl->runtimeVersion    = driver.m_impl->system->RuntimeVersion();
+                driver.m_impl->vendorId          = driver.m_impl->system->VendorId();
                 driver.m_impl->recommendedExtent = driver.m_impl->system->RecommendedEyeExtent();
                 LogInfo("vrf::xr::VrDriver: OpenXR runtime active - system '{}', recommended eye {}x{}",
                         driver.m_impl->systemName,
@@ -225,4 +231,8 @@ namespace vrf::xr
     const std::string& VrDriver::SystemName() const { return m_impl->systemName; }
 
     Extent2D VrDriver::RecommendedEyeExtent() const { return m_impl->recommendedExtent; }
+
+    const std::string& VrDriver::RuntimeName() const { return m_impl->runtimeName; }
+    const std::string& VrDriver::RuntimeVersion() const { return m_impl->runtimeVersion; }
+    uint32_t           VrDriver::VendorId() const { return m_impl->vendorId; }
 } // namespace vrf::xr

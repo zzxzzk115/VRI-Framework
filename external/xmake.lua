@@ -9,7 +9,12 @@ local vri_configs = {
     d3d12  = has_config("vrf_backend_d3d12"),
     metal  = has_config("vrf_backend_metal"),
 }
-add_requires("vri v0.1.15", {configs = vri_configs})
+-- v0.1.16 adds Metal argument-buffer bindless: a descriptor set is promoted to a Metal 3
+-- argument buffer when it declares bindless intent or no longer fits the direct argument
+-- tables, so a material-texture array is no longer capped at Metal's 128-per-stage limit.
+-- VriDeviceDesc grew bindlessTextureMaxNum / bindlessSamplerMaxNum at the END of the struct
+-- (additive; existing offsets unchanged), which is why this is a pin move and nothing else.
+add_requires("vri v0.1.17", {configs = vri_configs})
 
 -- glm: math types used across the framework's public API.
 add_requires("glm")
@@ -102,12 +107,17 @@ end
 -- Gaussian Splatting stack (always built - small): GaussForge (a trimmed fork - no SOG/CLI/WASM)
 -- plus Niantic's spz, both vendored as source under external/. Declared as their own static libs
 -- so the third-party sources stay out of the vrf lib's own compilation. Mirrors vasset's wiring.
+--
+-- These stay DEFAULT targets on purpose: `xmake install` only installs default targets, and vrf
+-- is a static lib, so the vendored archives must ship next to vrf.lib or a consumer that touches
+-- the gaussian-splat loader link-fails on undefined gf::/spz symbols. Their headers are private
+-- (confined to gaussian_splat_loader.cpp), hence {install = false} - they are listed only so the
+-- files show up in generated IDE projects.
 add_requires("zlib")
 
 target("spz")
     set_kind("static")
-    set_default(false)
-    add_headerfiles("spz/**.h")
+    add_headerfiles("spz/**.h", {install = false})
     add_includedirs("spz/src/cc", {public = true})
     add_files("spz/**.cc")
     add_packages("zlib", {public = true})
@@ -115,8 +125,7 @@ target("spz")
 
 target("GaussForge")
     set_kind("static")
-    set_default(false)
-    add_headerfiles("GaussForge/include/(gf/**.h)")
+    add_headerfiles("GaussForge/include/(gf/**.h)", {install = false})
     add_includedirs("GaussForge/include", {public = true})
     add_files("GaussForge/src/core/**.cpp", "GaussForge/src/io/**.cpp")
     remove_files("GaussForge/src/io/sog_*.cpp") -- SOG format is intentionally dropped (see vasset)
