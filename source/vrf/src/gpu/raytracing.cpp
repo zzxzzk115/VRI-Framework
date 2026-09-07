@@ -178,8 +178,8 @@ namespace vrf
         // The size lands in a device buffer first: the query writes from the GPU timeline, and a
         // host-visible destination would be a mapped write racing the copy it is meant to report.
         VriBufferDesc sizeDesc {};
-        sizeDesc.size           = sizeof(uint64_t);
-        sizeDesc.usage          = VriBufferUsage_StorageBuffer | VriBufferUsage_TransferSrc;
+        sizeDesc.size  = sizeof(uint64_t);
+        sizeDesc.usage = VriBufferUsage_StorageBuffer | VriBufferUsage_TransferSrc | VriBufferUsage_TransferDst;
         sizeDesc.memoryLocation = VriMemoryLocation_Device;
         VriBuffer* sizeBuffer   = nullptr;
         if (const auto r = core.CreateBuffer(device.Handle(), &sizeDesc, &sizeBuffer); r != VriResult_Success)
@@ -199,9 +199,11 @@ namespace vrf
         ImmediateSubmit(device, [&](VriCommandBuffer* cmd) {
             m_api.CmdWriteAccelerationStructureCompactedSize(cmd, m_as, sizeBuffer, 0);
             VriBufferBarrierDesc barrier {};
-            barrier.buffer        = sizeBuffer;
-            barrier.before.access = VriAccess_ShaderResourceStorageWrite;
-            barrier.before.stages = VriPipelineStage_AccelerationStructureBuild;
+            barrier.buffer = sizeBuffer;
+            // Vulkan copies a query result; DXR emits postbuild info as a UAV write.
+            const bool queryCopy  = device.Api() == VriGraphicsAPI_Vulkan;
+            barrier.before.access = queryCopy ? VriAccess_CopyDestinationWrite : VriAccess_ShaderResourceStorageWrite;
+            barrier.before.stages = queryCopy ? VriPipelineStage_Transfer : VriPipelineStage_AccelerationStructureBuild;
             barrier.after.access  = VriAccess_CopySourceRead;
             barrier.after.stages  = VriPipelineStage_Transfer;
             VriBarrierGroupDesc group {};

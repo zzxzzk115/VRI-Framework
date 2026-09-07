@@ -14,7 +14,7 @@ local vri_configs = {
 -- tables, so a material-texture array is no longer capped at Metal's 128-per-stage limit.
 -- VriDeviceDesc grew bindlessTextureMaxNum / bindlessSamplerMaxNum at the END of the struct
 -- (additive; existing offsets unchanged), which is why this is a pin move and nothing else.
-add_requires("vri v0.1.16", {configs = vri_configs})
+add_requires("vri v0.1.17", {configs = vri_configs})
 
 -- glm: math types used across the framework's public API.
 add_requires("glm")
