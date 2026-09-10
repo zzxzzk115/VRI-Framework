@@ -74,7 +74,14 @@ API surface — and every GPU object is move-only RAII.
 - Loader-agnostic SoA `Mesh`, a multi-shading-model `Material` (`std::variant` over Unlit /
   PBR-MetallicRoughness / PBR-SpecularGlossiness / Phong), `Texture`, `Light`, `GaussianSplat`.
 - Raw loaders (file → data, third-party headers confined to `.cpp`): `LoadObj`, `LoadGltf`,
-  `LoadImage` (png/jpg/hdr), `LoadKtxDds` (DDS + KTX1), opt-in `LoadKtx2` (libktx).
+  `LoadImage` (png/jpg/hdr), `LoadKtxDds` (DDS + KTX1), opt-in `LoadKtx2` (libktx)
+  and `LoadFbx` (OpenFBX). FBX bakes static node/geometric transforms, keeps source
+  axes, optionally converts units to meters, and preserves compressed DDS mip chains.
+  It requires normals and UVs and supports triangles/convex quads; animation,
+  embedded-texture extraction and arbitrary polygon tessellation are not implemented.
+  `FbxMaterialConvention::OrcaMetallicRoughness` is explicit, so ordinary Phong
+  FBX files are not misinterpreted as ORCA materials. `LoadFbx` is called directly;
+  the glTF/OBJ bake-cache dispatcher is unchanged.
 - **3D Gaussian Splatting** via the vendored **GaussForge** (+ Niantic spz) stack — `LoadGaussianSplat`
   dispatches by extension across `.ply` / `.compressed.ply` / `.spz` / `.splat` / `.ksplat`
   (the `.sog` WebP-container format is trimmed out, matching the reference build).
@@ -126,6 +133,7 @@ xmake run vrf_example_triangle
 | `vrf_with_tracy` | `false` | Tracy CPU profiling zones |
 | `vrf_loader_ktx2` | `false` | KTX2 texture loader (libktx; heavy) |
 | `vrf_loader_draco` | `false` | Draco-compressed glTF |
+| `vrf_loader_fbx` | `false` | Static FBX via OpenFBX v0.9; includes explicit ORCA material convention |
 | `vrf_cook_shaders` | `false` | Re-cook `.vshlib` shader variants via `vshaderc` |
 | `vrf_build_examples` / `vrf_build_tests` | `true` | Build examples / tests |
 

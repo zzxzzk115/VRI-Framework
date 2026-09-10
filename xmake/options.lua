@@ -1,6 +1,12 @@
 -- All vrf_* option declarations, shared by the standalone build (root xmake.lua)
 -- and by consumers that embed the framework via `includes("<vrf>/embed.lua")`.
 
+option("vrf_loader_fbx")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Enable FBX model loading via OpenFBX")
+option_end()
+
 option("vrf_build_examples") -- build examples?
     set_default(true)
     set_showmenu(true)
