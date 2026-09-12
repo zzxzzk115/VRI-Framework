@@ -131,3 +131,30 @@ TEST_CASE("shader reflection: the table is the BASE variant's, shared by every v
     CHECK(extra->binding == 5);
     CHECK(extra->kind == vrf::DescriptorKind::SampledImage);
 }
+
+TEST_CASE("shader reflection: v1.2.1 cooks preserve each variant's bindings and bytecode")
+{
+    auto lib = vrf::ShaderLibrary::LoadFromFile(std::string(VRF_TEST_ASSET_DIR) + "/reflection_fixture_1_2_1.vshlib");
+    REQUIRE(lib.has_value());
+
+    const vrf::ResolvedShader base  = ResolveFixture(*lib, 0);
+    const vrf::ResolvedShader gated = ResolveFixture(*lib, 1);
+    REQUIRE(base.reflection != nullptr);
+    REQUIRE(gated.reflection != nullptr);
+    CHECK(base.isBaseVariant);
+    CHECK_FALSE(gated.isBaseVariant);
+    CHECK(base.reflection->Find("t_Extra") != nullptr);
+    CHECK(gated.reflection->Find("t_Extra") == nullptr);
+    CHECK(base.reflection->descriptors.size() == gated.reflection->descriptors.size() + 1);
+    for (const auto* shader : {&base, &gated})
+    {
+        REQUIRE(shader->spirv != nullptr);
+        CHECK(shader->spirvSize > 0);
+        REQUIRE(shader->wgsl != nullptr);
+        CHECK(shader->wgslSize > 0);
+        CHECK(shader->reflection->Find("u_Params") != nullptr);
+        CHECK(shader->reflection->localSize[0] == 8);
+        CHECK(shader->reflection->localSize[1] == 4);
+        CHECK(shader->reflection->localSize[2] == 1);
+    }
+}

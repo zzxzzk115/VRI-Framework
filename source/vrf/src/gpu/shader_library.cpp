@@ -121,7 +121,7 @@ namespace vrf
         // Framework-side mirror of each entry's reflection, index-aligned with `binaries`.
         // Converted once at load so Resolve stays a pure lookup, and stored separately (rather
         // than handed out as vsh::ShaderReflection&) to keep vshadersystem inside this file.
-        // One entry per variant, but the cooker writes the same (base-variant) table into all of
+        // One entry per variant. Legacy cooks can repeat the base table in all of
         // a shader's variants - see the contract on ResolvedShader::reflection.
         std::vector<ShaderReflection> reflections;
         // variantHash -> index into `binaries`.
