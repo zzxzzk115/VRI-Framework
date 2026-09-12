@@ -284,7 +284,28 @@ namespace vrf
         }
         if (mesh.positions.empty())
             return MakeError("LoadFbx: no mesh geometry");
+        // Finite input components can still overflow the float-space differences used by GenerateTangents.
+        for (size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+        {
+            const auto first = mesh.indices[i];
+            for (size_t corner = 1; corner < 3; ++corner)
+            {
+                const auto index = mesh.indices[i + corner];
+                const auto edge  = mesh.positions[index] - mesh.positions[first];
+                const auto uv    = mesh.texCoords0[index] - mesh.texCoords0[first];
+                if (!std::isfinite(edge.x) || !std::isfinite(edge.y) || !std::isfinite(edge.z) ||
+                    !std::isfinite(uv.x) || !std::isfinite(uv.y))
+                    return MakeError("LoadFbx: invalid tangent input");
+            }
+        }
         mesh.tangents = GenerateTangents(mesh);
+        for (const auto& tangent : mesh.tangents)
+        {
+            const auto length = glm::length(glm::vec3(tangent));
+            if (!std::isfinite(tangent.x) || !std::isfinite(tangent.y) || !std::isfinite(tangent.z) ||
+                !std::isfinite(tangent.w) || !std::isfinite(length) || length < 1e-12f)
+                return MakeError("LoadFbx: invalid tangent");
+        }
         // GenerateTangents uses the imported UVs. Flipping V already reverses
         // its bitangent, which compensates a DirectX map's negative green.
         if (options.directXNormalMaps != options.flipTexCoordY)
