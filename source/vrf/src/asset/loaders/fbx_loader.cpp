@@ -95,12 +95,31 @@ namespace vrf
             if (name.empty())
                 name = Text(texture->getFileName());
             std::replace(name.begin(), name.end(), '\\', '/');
-            fs::path resolved = base / name;
-            if (!fs::is_regular_file(resolved))
+            fs::path        resolved = base / name;
+            std::error_code error;
+            const auto      regularFile = [&](const fs::path& candidate) {
+                const bool regular = fs::is_regular_file(candidate, error);
+                // Missing authored paths still get the existing basename fallback.
+                if (error == std::errc::no_such_file_or_directory || error == std::errc::not_a_directory)
+                    error.clear();
+                return regular;
+            };
+            bool regular = regularFile(resolved);
+            if (error)
+                return MakeError("LoadFbx: texture path " + name + ": " + error.message());
+            if (!regular)
+            {
                 resolved = base / fs::path(name).filename();
-            if (!fs::is_regular_file(resolved))
+                regular  = regularFile(resolved);
+                if (error)
+                    return MakeError("LoadFbx: texture path " + name + ": " + error.message());
+            }
+            if (!regular)
                 return MakeError("LoadFbx: missing texture " + name);
-            const auto key = fs::weakly_canonical(resolved).generic_string();
+            const auto canonical = fs::weakly_canonical(resolved, error);
+            if (error)
+                return MakeError("LoadFbx: texture path " + name + ": " + error.message());
+            const auto key = canonical.generic_string();
             if (const auto found = textures.find(key); found != textures.end())
                 return TextureRef {found->second};
             Texture loaded;
@@ -229,15 +248,18 @@ namespace vrf
                             vertices.try_emplace(key, static_cast<uint32_t>(mesh.positions.size()));
                         if (inserted)
                         {
-                            const auto p      = positions.get(corner);
-                            const auto n      = normals.get(corner);
-                            const auto uv     = uvs.get(corner);
-                            const auto world  = transform * glm::dvec4(p.x, p.y, p.z, 1.0);
-                            const auto normal = normalTransform * glm::dvec3(n.x, n.y, n.z);
-                            if (!std::isfinite(world.x + world.y + world.z) || glm::length(normal) < 1e-12)
+                            const auto   p            = positions.get(corner);
+                            const auto   n            = normals.get(corner);
+                            const auto   uv           = uvs.get(corner);
+                            const auto   world        = transform * glm::dvec4(p.x, p.y, p.z, 1.0);
+                            const auto   normal       = normalTransform * glm::dvec3(n.x, n.y, n.z);
+                            const double normalLength = glm::length(normal);
+                            if (!std::isfinite(world.x + world.y + world.z) || !std::isfinite(normal.x) ||
+                                !std::isfinite(normal.y) || !std::isfinite(normal.z) || !std::isfinite(normalLength) ||
+                                normalLength < 1e-12)
                                 return MakeError("LoadFbx: invalid position or normal");
                             mesh.positions.emplace_back(glm::dvec3(world) * scale);
-                            mesh.normals.emplace_back(glm::normalize(normal));
+                            mesh.normals.emplace_back(normal / normalLength);
                             mesh.texCoords0.emplace_back(uv.x, options.flipTexCoordY ? 1.0f - uv.y : uv.y);
                         }
                         mesh.indices.push_back(found->second);
