@@ -4,6 +4,7 @@
 #include <utility>
 
 #include <vrf/gpu/shader_library.hpp>
+#include <vshadersystem/shader_id.hpp>
 
 // A .vshlib has always carried each variant's descriptor table; ShaderLibrary deserialized it and
 // Resolve() dropped it, so consumers re-declared every binding by hand next to the shader and a
@@ -39,6 +40,13 @@ TEST_CASE("shader reflection: graphics metadata follows vertex layout variants")
         auto       fragment = lib->Resolve("graphics_reflection", vrf::ShaderStage::Fragment, keywords);
         REQUIRE(vertex.has_value());
         REQUIRE(fragment.has_value());
+        auto hashed =
+            lib->ResolveHash(vshadersystem::shader_id_hash("graphics_reflection"), vrf::ShaderStage::Vertex, keywords);
+        REQUIRE(hashed.has_value());
+        CHECK(hashed->spirv == vertex->spirv);
+        CHECK(hashed->wgsl == vertex->wgsl);
+        CHECK(hashed->reflection == vertex->reflection);
+        CHECK(hashed->isBaseVariant == vertex->isBaseVariant);
         REQUIRE(vertex->reflection != nullptr);
         const auto& inputs = vertex->reflection->vertexInputs;
         REQUIRE(inputs.size() == (normals ? 2u : 1u));
@@ -77,6 +85,10 @@ TEST_CASE("shader reflection: graphics metadata follows vertex layout variants")
     CHECK_FALSE(lib->Resolve("graphics_reflection", vrf::ShaderStage::Vertex, {{"VTX_HAS_NORMAL", 2}}));
     CHECK_FALSE(lib->Resolve("graphics_reflection", vrf::ShaderStage::Compute, {}));
     CHECK_FALSE(lib->Resolve("missing", vrf::ShaderStage::Vertex, {}));
+    CHECK_FALSE(lib->ResolveHash(0, vrf::ShaderStage::Vertex, {}));
+    CHECK_FALSE(lib->ResolveHash(
+        vshadersystem::shader_id_hash("graphics_reflection"), vrf::ShaderStage::Vertex, {{"VTX_HAS_NORMAL", 2}}));
+    CHECK_FALSE(vrf::ShaderLibrary().ResolveHash(0, vrf::ShaderStage::Vertex, {}));
 
     auto resolved = lib->Resolve("graphics_reflection", vrf::ShaderStage::Vertex, {});
     REQUIRE(resolved.has_value());

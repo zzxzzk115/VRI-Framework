@@ -291,6 +291,16 @@ namespace vrf
                                                     ShaderStage                       stage,
                                                     const std::vector<ShaderKeyword>& keywords) const
     {
+        auto result = ResolveHash(vsh::shader_id_hash(shaderId), stage, keywords);
+        if (!result)
+            result.error().message += ": " + std::string(shaderId);
+        return result;
+    }
+
+    Expected<ResolvedShader> ShaderLibrary::ResolveHash(uint64_t                          shaderIdHash,
+                                                        ShaderStage                       stage,
+                                                        const std::vector<ShaderKeyword>& keywords) const
+    {
         if (!m_impl)
             return MakeError(VriResult_Failure, "ShaderLibrary::Resolve: library not loaded");
 
@@ -298,13 +308,13 @@ namespace vrf
         if (!vshStage)
             return std::unexpected(vshStage.error());
 
-        const uint64_t shaderIdHash = vsh::shader_id_hash(shaderId);
-        const uint64_t key          = ShaderStageKey(shaderIdHash, *vshStage);
+        const uint64_t key = ShaderStageKey(shaderIdHash, *vshStage);
 
         const auto declaredIt = m_impl->permuteKeywords.find(key);
         if (declaredIt == m_impl->permuteKeywords.end())
             return MakeError(VriResult_Failure,
-                             "ShaderLibrary::Resolve: no such shader/stage in library: " + std::string(shaderId));
+                             "ShaderLibrary::Resolve: no such shader/stage in library (ID hash " +
+                                 std::to_string(shaderIdHash) + ")");
 
         // Build the variant key from exactly the declared permute keywords (order-independent -
         // VariantKey::build sorts internally), pulling each value from the supplied set (default 0).
@@ -332,8 +342,8 @@ namespace vrf
         const auto     hit         = m_impl->byVariantHash.find(variantHash);
         if (hit == m_impl->byVariantHash.end())
             return MakeError(VriResult_Failure,
-                             "ShaderLibrary::Resolve: no variant for the requested keyword set of " +
-                                 std::string(shaderId));
+                             "ShaderLibrary::Resolve: no variant for the requested keyword set (ID hash " +
+                                 std::to_string(shaderIdHash) + ")");
 
         const vsh::ShaderBinary& bin = m_impl->binaries[hit->second];
         ResolvedShader           out;
