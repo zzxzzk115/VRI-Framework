@@ -1,18 +1,13 @@
 /*
  * shader_reflection.hpp - what a cooked shader declares about its own bindings.
  *
- * Every .vshlib carries the descriptor reflection the cooker extracted: name, set, binding, array
- * count, kind, access, stage mask and view dimension, plus the constant-block layouts, vertex
- * inputs, material
- * render state and compute [numthreads]. ShaderLibrary deserializes it at load
- * time and used to drop it on
- * the
- * floor - Resolve() copied out bytecode only - so every consumer re-declared the same bindings by hand alongside the
- * shader. A mismatch between the two spellings is not a validation error: it is a device hang on the first frame that
- * binds the pipeline, which is why exposing the data the loader already holds is worth a public type.
- *
- * Read the contract on ResolvedShader::reflection before building anything on this. vshadersystem
- * v1.2.1 cooks carry each variant's own table. Legacy v1.2.0 cooks share the BASE variant's table
+ * Cooked metadata includes descriptors, constant blocks, vertex inputs, material render state
+ * and compute local
+ * size. Exposing it lets consumers derive layouts and state from the same
+ * artifact as the bytecode, avoiding
+ * divergent hand-written declarations.
+ * Read the contract on ResolvedShader::reflection before building anything on
+ * this. vshadersystem v1.2.1 cooks carry each variant's own table. Legacy v1.2.0 cooks share the BASE variant's table
  * across all variants; recook those files before deriving keyword-dependent layouts.
  *
  * This is a MIRROR of the cooker's structures, not vshadersystem's own types. That library is
