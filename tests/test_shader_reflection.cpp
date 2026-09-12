@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <string>
+#include <utility>
 
 #include <vrf/gpu/shader_library.hpp>
 
@@ -23,6 +24,69 @@ namespace
         return *shader;
     }
 } // namespace
+
+TEST_CASE("shader reflection: graphics metadata follows vertex layout variants")
+{
+    auto lib = vrf::ShaderLibrary::LoadFromFile(std::string(VRF_TEST_ASSET_DIR) + "/graphics_reflection.vshlib");
+    REQUIRE(lib.has_value());
+
+    for (bool normals : {false, true})
+    {
+        const auto layout =
+            vrf::MakeVertexLayout(normals ? vrf::VertexAttribute::Normal : vrf::VertexAttribute::Position);
+        const auto keywords = vrf::ShaderKeywordsForVertexLayout(layout);
+        auto       vertex   = lib->Resolve("graphics_reflection", vrf::ShaderStage::Vertex, keywords);
+        auto       fragment = lib->Resolve("graphics_reflection", vrf::ShaderStage::Fragment, keywords);
+        REQUIRE(vertex.has_value());
+        REQUIRE(fragment.has_value());
+        REQUIRE(vertex->reflection != nullptr);
+        const auto& inputs = vertex->reflection->vertexInputs;
+        REQUIRE(inputs.size() == (normals ? 2u : 1u));
+        CHECK(inputs[0].location == 0);
+        CHECK(inputs[0].type == vrf::ReflectedParamType::Vec3);
+        CHECK_FALSE(inputs[0].name.empty());
+        if (normals)
+        {
+            CHECK(inputs[1].location == 1);
+            CHECK(inputs[1].type == vrf::ReflectedParamType::Vec3);
+        }
+        for (const auto* shader : {&*vertex, &*fragment})
+        {
+            CHECK(shader->isBaseVariant == !normals);
+            REQUIRE(shader->reflection != nullptr);
+            CHECK(shader->spirvSize > 0);
+            CHECK(shader->wgslSize > 0);
+            const auto& state = shader->reflection->renderState;
+            CHECK_FALSE(state.depthTest);
+            CHECK_FALSE(state.depthWrite);
+            CHECK(state.depthFunc == vrf::ReflectedCompareOp::Greater);
+            CHECK(state.cull == vrf::ReflectedCullMode::Front);
+            CHECK(state.blendEnable);
+            CHECK(state.alphaToCoverage);
+            CHECK(state.srcColor == vrf::ReflectedBlendFactor::One);
+            CHECK(state.dstColor == vrf::ReflectedBlendFactor::Zero);
+            CHECK(state.colorOp == vrf::ReflectedBlendOp::Add);
+            CHECK(state.srcAlpha == vrf::ReflectedBlendFactor::One);
+            CHECK(state.dstAlpha == vrf::ReflectedBlendFactor::Zero);
+            CHECK(state.alphaOp == vrf::ReflectedBlendOp::Add);
+            CHECK(state.colorMask == 0x0f);
+            CHECK(state.depthBiasFactor == 0.0f);
+            CHECK(state.depthBiasUnits == 0.0f);
+        }
+    }
+    CHECK_FALSE(lib->Resolve("graphics_reflection", vrf::ShaderStage::Vertex, {{"VTX_HAS_NORMAL", 2}}));
+    CHECK_FALSE(lib->Resolve("graphics_reflection", vrf::ShaderStage::Compute, {}));
+    CHECK_FALSE(lib->Resolve("missing", vrf::ShaderStage::Vertex, {}));
+
+    auto resolved = lib->Resolve("graphics_reflection", vrf::ShaderStage::Vertex, {});
+    REQUIRE(resolved.has_value());
+    auto moved = std::move(*lib);
+    REQUIRE(resolved->reflection != nullptr);
+    CHECK(resolved->reflection->vertexInputs.size() == 1);
+    auto afterMove = moved.Resolve("graphics_reflection", vrf::ShaderStage::Vertex, {});
+    REQUIRE(afterMove.has_value());
+    CHECK(afterMove->reflection == resolved->reflection);
+}
 
 TEST_CASE("shader reflection: the cooked descriptor table round-trips")
 {

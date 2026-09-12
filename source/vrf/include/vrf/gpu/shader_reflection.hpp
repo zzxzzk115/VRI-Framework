@@ -2,12 +2,14 @@
  * shader_reflection.hpp - what a cooked shader declares about its own bindings.
  *
  * Every .vshlib carries the descriptor reflection the cooker extracted: name, set, binding, array
- * count, kind, access, stage mask and view dimension, plus the constant-block layouts and the
- * compute [numthreads]. ShaderLibrary deserializes all of it at load time and used to drop it on
- * the floor - Resolve() copied out bytecode only - so every consumer re-declared the same bindings
- * by hand alongside the shader. A mismatch between the two spellings is not a validation error: it
- * is a device hang on the first frame that binds the pipeline, which is why exposing the data the
- * loader already holds is worth a public type.
+ * count, kind, access, stage mask and view dimension, plus the constant-block layouts, vertex
+ * inputs, material
+ * render state and compute [numthreads]. ShaderLibrary deserializes it at load
+ * time and used to drop it on
+ * the
+ * floor - Resolve() copied out bytecode only - so every consumer re-declared the same bindings by hand alongside the
+ * shader. A mismatch between the two spellings is not a validation error: it is a device hang on the first frame that
+ * binds the pipeline, which is why exposing the data the loader already holds is worth a public type.
  *
  * Read the contract on ResolvedShader::reflection before building anything on this. vshadersystem
  * v1.2.1 cooks carry each variant's own table. Legacy v1.2.0 cooks share the BASE variant's table
@@ -121,6 +123,90 @@ namespace vrf
         std::vector<ReflectedBlockMember> members;
     };
 
+    enum class ReflectedParamType : uint8_t
+    {
+        Float,
+        Vec2,
+        Vec3,
+        Vec4,
+        Int,
+        UInt,
+        Bool,
+        Mat3,
+        Mat4,
+    };
+
+    struct ReflectedVertexInput
+    {
+        std::string        name;
+        std::string        semantic;
+        uint32_t           location {0};
+        ReflectedParamType type {ReflectedParamType::Float};
+    };
+
+    enum class ReflectedCompareOp : uint8_t
+    {
+        Never,
+        Less,
+        Equal,
+        LessOrEqual,
+        Greater,
+        NotEqual,
+        GreaterOrEqual,
+        Always,
+    };
+
+    enum class ReflectedCullMode : uint8_t
+    {
+        None,
+        Back,
+        Front,
+    };
+
+    enum class ReflectedBlendFactor : uint8_t
+    {
+        Zero,
+        One,
+        SrcColor,
+        OneMinusSrcColor,
+        DstColor,
+        OneMinusDstColor,
+        SrcAlpha,
+        OneMinusSrcAlpha,
+        DstAlpha,
+        OneMinusDstAlpha,
+    };
+
+    enum class ReflectedBlendOp : uint8_t
+    {
+        Add,
+        Subtract,
+        ReverseSubtract,
+        Min,
+        Max,
+    };
+
+    // Cooked material state, kept in cooker terms like descriptor reflection. Consumers map
+    // it to their pipeline API; loading must not silently replace authored state with defaults.
+    struct ReflectedRenderState
+    {
+        bool                 depthTest {true};
+        bool                 depthWrite {true};
+        ReflectedCompareOp   depthFunc {ReflectedCompareOp::LessOrEqual};
+        ReflectedCullMode    cull {ReflectedCullMode::Back};
+        bool                 blendEnable {false};
+        ReflectedBlendFactor srcColor {ReflectedBlendFactor::One};
+        ReflectedBlendFactor dstColor {ReflectedBlendFactor::Zero};
+        ReflectedBlendOp     colorOp {ReflectedBlendOp::Add};
+        ReflectedBlendFactor srcAlpha {ReflectedBlendFactor::One};
+        ReflectedBlendFactor dstAlpha {ReflectedBlendFactor::Zero};
+        ReflectedBlendOp     alphaOp {ReflectedBlendOp::Add};
+        uint8_t              colorMask {0x0f}; // RGBA occupy bits 0..3.
+        bool                 alphaToCoverage {false};
+        float                depthBiasFactor {0.0f};
+        float                depthBiasUnits {0.0f};
+    };
+
     struct ShaderReflection
     {
         std::vector<ReflectedDescriptor> descriptors;
@@ -128,6 +214,9 @@ namespace vrf
 
         bool     hasLocalSize {false};
         uint32_t localSize[3] {1, 1, 1};
+
+        std::vector<ReflectedVertexInput> vertexInputs;
+        ReflectedRenderState              renderState;
 
         // Both return null when nothing matches in this table. For v1.2.1 cooks this is the
         // resolved variant's table; for legacy v1.2.0 cooks it describes only the BASE variant,
