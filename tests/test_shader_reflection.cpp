@@ -89,7 +89,7 @@ TEST_CASE("shader reflection: the cooked descriptor table round-trips")
     }
 }
 
-TEST_CASE("shader reflection: the table is the BASE variant's, shared by every variant")
+TEST_CASE("shader reflection: legacy v1.2.0 cooks share the BASE variant's table")
 {
     // The limitation every consumer has to design around, pinned here because it is invisible
     // otherwise and fatal to build on. vshadersystem v1.2.0 specializes the BYTECODE per variant
@@ -100,8 +100,8 @@ TEST_CASE("shader reflection: the table is the BASE variant's, shared by every v
     // - is the dangerous direction: the reflection then UNDER-reports, and a layout derived from it
     // is short, which is a first-frame device hang with no validation message.
     //
-    // When the cooker starts emitting per-variant reflection this test fails, which is exactly
-    // when every consumer wants to hear about it.
+    // Keep this legacy fixture unchanged: upgrading the loader cannot repair old cooked tables.
+    // The separate v1.2.1 fixture below verifies per-variant reflection from the newer cooker.
     auto lib = vrf::ShaderLibrary::LoadFromFile(kFixture);
     REQUIRE(lib.has_value());
 

@@ -9,9 +9,9 @@
  * is a device hang on the first frame that binds the pipeline, which is why exposing the data the
  * loader already holds is worth a public type.
  *
- * Read the contract on ResolvedShader::reflection before building anything on this: with
- * vshadersystem v1.2.0 the table describes the BASE variant and is shared by every variant of the
- * shader, so for a keyword-gated shader it is a cross-check, not a source of truth.
+ * Read the contract on ResolvedShader::reflection before building anything on this. vshadersystem
+ * v1.2.1 cooks carry each variant's own table. Legacy v1.2.0 cooks share the BASE variant's table
+ * across all variants; recook those files before deriving keyword-dependent layouts.
  *
  * This is a MIRROR of the cooker's structures, not vshadersystem's own types. That library is
  * confined to shader_library.cpp (PImpl) so its headers - and the spirv-cross / glslang it drags
@@ -129,9 +129,10 @@ namespace vrf
         bool     hasLocalSize {false};
         uint32_t localSize[3] {1, 1, 1};
 
-        // Both return null when nothing matches. "Not present" means the BASE variant does not
-        // declare it, which is not the same as "this variant does not use it" - see the contract
-        // on ResolvedShader::reflection.
+        // Both return null when nothing matches in this table. For v1.2.1 cooks this is the
+        // resolved variant's table; for legacy v1.2.0 cooks it describes only the BASE variant,
+        // so absence does not establish absence from a non-base variant. See the contract on
+        // ResolvedShader::reflection.
         [[nodiscard]] const ReflectedDescriptor* Find(std::string_view name) const
         {
             for (const ReflectedDescriptor& d : descriptors)
