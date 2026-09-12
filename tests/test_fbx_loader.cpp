@@ -1,6 +1,9 @@
 #include <doctest/doctest.h>
 
+#include <chrono>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <vrf/vrf.hpp>
 
 TEST_CASE("FBX loader reports unavailable or missing input without modifying output")
@@ -12,6 +15,58 @@ TEST_CASE("FBX loader reports unavailable or missing input without modifying out
 }
 
 #ifdef VRF_TEST_FBX
+TEST_CASE("FBX invalid normals and texture paths preserve the Expected error contract")
+{
+    const auto    fixture = std::filesystem::path(VRF_TEST_ASSET_DIR) / "fbx_static.fbx";
+    std::ifstream input(fixture, std::ios::binary);
+    REQUIRE(input.good());
+    const std::string original((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    for (const bool badPath : {false, true})
+    {
+        std::string       text   = original;
+        const std::string needle = badPath ? "rgba8_2x2.dds" : "Normals: *9 { a: 0,0,1,0,0,1,0,0,1 }";
+        const std::string replacement =
+            badPath ? std::string(300, 'x') + ".dds" : "Normals: *9 { a: 0,0,1e309,0,0,1,0,0,1 }";
+        auto offset = text.find(needle);
+        REQUIRE(offset != std::string::npos);
+        do
+        {
+            text.replace(offset, needle.size(), replacement);
+            offset = text.find(needle, offset + replacement.size());
+        } while (offset != std::string::npos);
+        struct TemporaryFbx
+        {
+            std::filesystem::path path;
+            ~TemporaryFbx()
+            {
+                std::error_code error;
+                std::filesystem::remove(path, error);
+            }
+        } temporary {
+            std::filesystem::temp_directory_path() /
+            ("vrf-invalid-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".fbx")};
+        {
+            std::ofstream output(temporary.path, std::ios::binary);
+            output << text;
+            REQUIRE(output.good());
+        }
+        vrf::Mesh mesh;
+        mesh.name = "sentinel";
+        vrf::FbxImportOptions options;
+        options.loadTextures = badPath;
+        const auto load      = [&] {
+            const auto result = vrf::LoadFbx(temporary.path.string(), mesh, options);
+            CHECK_FALSE(result.has_value());
+            if (!result)
+                CHECK(result.error().message.find(badPath ? "texture" : "invalid position or normal") !=
+                      std::string::npos);
+        };
+        CHECK_NOTHROW(load());
+        CHECK(mesh.name == "sentinel");
+        CHECK(mesh.positions.empty());
+    }
+}
+
 TEST_CASE("FBX Phong transparency preserves opacity and alpha mode")
 {
     for (const bool transparent : {false, true})
