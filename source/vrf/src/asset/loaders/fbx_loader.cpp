@@ -250,15 +250,16 @@ namespace vrf
                             vertices.try_emplace(key, static_cast<uint32_t>(mesh.positions.size()));
                         if (inserted)
                         {
-                            const auto   p            = positions.get(corner);
-                            const auto   n            = normals.get(corner);
-                            const auto   uv           = uvs.get(corner);
-                            const auto   world        = transform * glm::dvec4(p.x, p.y, p.z, 1.0);
-                            const auto   normal       = normalTransform * glm::dvec3(n.x, n.y, n.z);
-                            const double normalLength = glm::length(normal);
+                            const auto p      = positions.get(corner);
+                            const auto n      = normals.get(corner);
+                            const auto uv     = uvs.get(corner);
+                            const auto world  = transform * glm::dvec4(p.x, p.y, p.z, 1.0);
+                            const auto normal = normalTransform * glm::dvec3(n.x, n.y, n.z);
+                            // Inverse-transpose scaling can make valid normals extremely small or large.
+                            const double normalLength = std::hypot(normal.x, normal.y, normal.z);
                             if (!std::isfinite(world.x + world.y + world.z) || !std::isfinite(normal.x) ||
                                 !std::isfinite(normal.y) || !std::isfinite(normal.z) || !std::isfinite(normalLength) ||
-                                normalLength < 1e-12)
+                                normalLength == 0.0)
                                 return MakeError("LoadFbx: invalid position or normal");
                             const glm::vec2 texCoord(uv.x, options.flipTexCoordY ? 1.0f - uv.y : uv.y);
                             if (!std::isfinite(texCoord.x) || !std::isfinite(texCoord.y))
