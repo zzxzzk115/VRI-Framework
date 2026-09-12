@@ -15,19 +15,29 @@ TEST_CASE("FBX loader reports unavailable or missing input without modifying out
 }
 
 #ifdef VRF_TEST_FBX
-TEST_CASE("FBX invalid normals and texture paths preserve the Expected error contract")
+TEST_CASE("FBX invalid normals, UVs and texture paths preserve the Expected error contract")
 {
     const auto    fixture = std::filesystem::path(VRF_TEST_ASSET_DIR) / "fbx_static.fbx";
     std::ifstream input(fixture, std::ios::binary);
     REQUIRE(input.good());
     const std::string original((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    for (const bool badPath : {false, true})
+    struct InvalidInput
     {
-        std::string       text   = original;
-        const std::string needle = badPath ? "rgba8_2x2.dds" : "Normals: *9 { a: 0,0,1,0,0,1,0,0,1 }";
-        const std::string replacement =
-            badPath ? std::string(300, 'x') + ".dds" : "Normals: *9 { a: 0,0,1e309,0,0,1,0,0,1 }";
-        auto offset = text.find(needle);
+        std::string needle, replacement, error;
+        bool        loadTextures = false;
+    };
+    for (const auto& invalid :
+         {InvalidInput {"Normals: *9 { a: 0,0,1,0,0,1,0,0,1 }",
+                        "Normals: *9 { a: 0,0,1e309,0,0,1,0,0,1 }",
+                        "invalid position or normal"},
+          InvalidInput {"rgba8_2x2.dds", std::string(300, 'x') + ".dds", "texture", true},
+          InvalidInput {"UV: *6 { a: 0,0,1,0,0,1 }", "UV: *6 { a: 1e309,0,1,0,0,1 }", "invalid texture coordinate"},
+          InvalidInput {"UV: *6 { a: 0,0,1,0,0,1 }", "UV: *6 { a: 0,-1e309,1,0,0,1 }", "invalid texture coordinate"}})
+    {
+        std::string text        = original;
+        const auto& needle      = invalid.needle;
+        const auto& replacement = invalid.replacement;
+        auto        offset      = text.find(needle);
         REQUIRE(offset != std::string::npos);
         do
         {
@@ -53,13 +63,12 @@ TEST_CASE("FBX invalid normals and texture paths preserve the Expected error con
         vrf::Mesh mesh;
         mesh.name = "sentinel";
         vrf::FbxImportOptions options;
-        options.loadTextures = badPath;
+        options.loadTextures = invalid.loadTextures;
         const auto load      = [&] {
             const auto result = vrf::LoadFbx(temporary.path.string(), mesh, options);
             CHECK_FALSE(result.has_value());
             if (!result)
-                CHECK(result.error().message.find(badPath ? "texture" : "invalid position or normal") !=
-                      std::string::npos);
+                CHECK(result.error().message.find(invalid.error) != std::string::npos);
         };
         CHECK_NOTHROW(load());
         CHECK(mesh.name == "sentinel");

@@ -258,9 +258,12 @@ namespace vrf
                                 !std::isfinite(normal.y) || !std::isfinite(normal.z) || !std::isfinite(normalLength) ||
                                 normalLength < 1e-12)
                                 return MakeError("LoadFbx: invalid position or normal");
+                            const glm::vec2 texCoord(uv.x, options.flipTexCoordY ? 1.0f - uv.y : uv.y);
+                            if (!std::isfinite(texCoord.x) || !std::isfinite(texCoord.y))
+                                return MakeError("LoadFbx: invalid texture coordinate");
                             mesh.positions.emplace_back(glm::dvec3(world) * scale);
                             mesh.normals.emplace_back(normal / normalLength);
-                            mesh.texCoords0.emplace_back(uv.x, options.flipTexCoordY ? 1.0f - uv.y : uv.y);
+                            mesh.texCoords0.push_back(texCoord);
                         }
                         mesh.indices.push_back(found->second);
                     }
