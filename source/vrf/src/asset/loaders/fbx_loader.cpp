@@ -6,6 +6,7 @@
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <unordered_map>
 
@@ -261,7 +262,14 @@ namespace vrf
                             const glm::vec2 texCoord(uv.x, options.flipTexCoordY ? 1.0f - uv.y : uv.y);
                             if (!std::isfinite(texCoord.x) || !std::isfinite(texCoord.y))
                                 return MakeError("LoadFbx: invalid texture coordinate");
-                            mesh.positions.emplace_back(glm::dvec3(world) * scale);
+                            // Validate the final coordinates before narrowing to Mesh's float storage.
+                            const auto position    = glm::dvec3(world) * scale;
+                            const auto maxPosition = static_cast<double>((std::numeric_limits<float>::max)());
+                            if (!std::isfinite(position.x) || !std::isfinite(position.y) ||
+                                !std::isfinite(position.z) || std::abs(position.x) > maxPosition ||
+                                std::abs(position.y) > maxPosition || std::abs(position.z) > maxPosition)
+                                return MakeError("LoadFbx: invalid position after unit scaling");
+                            mesh.positions.emplace_back(position);
                             mesh.normals.emplace_back(normal / normalLength);
                             mesh.texCoords0.push_back(texCoord);
                         }

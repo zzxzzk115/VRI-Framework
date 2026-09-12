@@ -15,7 +15,7 @@ TEST_CASE("FBX loader reports unavailable or missing input without modifying out
 }
 
 #ifdef VRF_TEST_FBX
-TEST_CASE("FBX invalid normals, UVs and texture paths preserve the Expected error contract")
+TEST_CASE("FBX invalid geometry and texture paths preserve the Expected error contract")
 {
     const auto    fixture = std::filesystem::path(VRF_TEST_ASSET_DIR) / "fbx_static.fbx";
     std::ifstream input(fixture, std::ios::binary);
@@ -24,7 +24,8 @@ TEST_CASE("FBX invalid normals, UVs and texture paths preserve the Expected erro
     struct InvalidInput
     {
         std::string needle, replacement, error;
-        bool        loadTextures = false;
+        bool        loadTextures    = false;
+        bool        convertToMeters = true;
     };
     for (const auto& invalid :
          {InvalidInput {"Normals: *9 { a: 0,0,1,0,0,1,0,0,1 }",
@@ -32,7 +33,20 @@ TEST_CASE("FBX invalid normals, UVs and texture paths preserve the Expected erro
                         "invalid position or normal"},
           InvalidInput {"rgba8_2x2.dds", std::string(300, 'x') + ".dds", "texture", true},
           InvalidInput {"UV: *6 { a: 0,0,1,0,0,1 }", "UV: *6 { a: 1e309,0,1,0,0,1 }", "invalid texture coordinate"},
-          InvalidInput {"UV: *6 { a: 0,0,1,0,0,1 }", "UV: *6 { a: 0,-1e309,1,0,0,1 }", "invalid texture coordinate"}})
+          InvalidInput {"UV: *6 { a: 0,0,1,0,0,1 }", "UV: *6 { a: 0,-1e309,1,0,0,1 }", "invalid texture coordinate"},
+          InvalidInput {"\"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\", -1, 2, 1",
+                        "\"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\", 1e38, 2, 1",
+                        "invalid position",
+                        false,
+                        false},
+          InvalidInput {"\"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\", -1, 2, 1",
+                        "\"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\", -1e38, 2, 1",
+                        "invalid position",
+                        false,
+                        false},
+          InvalidInput {"\"UnitScaleFactor\", \"double\", \"Number\", \"\", 1",
+                        "\"UnitScaleFactor\", \"double\", \"Number\", \"\", 3e38",
+                        "invalid position"}})
     {
         std::string text        = original;
         const auto& needle      = invalid.needle;
@@ -63,9 +77,12 @@ TEST_CASE("FBX invalid normals, UVs and texture paths preserve the Expected erro
         vrf::Mesh mesh;
         mesh.name = "sentinel";
         vrf::FbxImportOptions options;
-        options.loadTextures = invalid.loadTextures;
-        const auto load      = [&] {
+        options.loadTextures    = invalid.loadTextures;
+        options.convertToMeters = invalid.convertToMeters;
+        const auto load         = [&] {
             const auto result = vrf::LoadFbx(temporary.path.string(), mesh, options);
+            INFO(invalid.replacement);
+            INFO((result ? "success" : result.error().message));
             CHECK_FALSE(result.has_value());
             if (!result)
                 CHECK(result.error().message.find(invalid.error) != std::string::npos);
