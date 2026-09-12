@@ -34,11 +34,12 @@ jobs:
   # macOS (they only need to build, not run); they stay off on Linux, where the model picker
   # (NFD) would pull GTK.
   desktop:
-    name: desktop (${{ matrix.os }})
+    name: desktop (${{ matrix.os }}, fbx=${{ matrix.fbx }})
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        fbx: [n, y]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +81,7 @@ jobs:
           xmake f -y -m release
           -p ${{ runner.os == 'Windows' && 'windows' || 'linux' }}
           ${{ runner.os == 'Windows' && '-a x64 --vs_toolset=14.44' || '' }}
-          --vrf_build_examples=${{ runner.os == 'Windows' && 'y' || 'n' }} --vrf_build_tests=y --policies=build.ccache:y
+          --vrf_build_examples=${{ runner.os == 'Windows' && 'y' || 'n' }} --vrf_build_tests=y --vrf_loader_fbx=${{ matrix.fbx }} --policies=build.ccache:y
 
       - name: Build
         run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y
@@ -125,7 +126,7 @@ jobs:
           build-cache: true
 
       - name: Configure
-        run: xmake f -y -m release -p macosx --vrf_build_examples=y --vrf_build_tests=y --policies=build.ccache:y
+        run: xmake f -y -m release -p macosx --vrf_build_examples=y --vrf_build_tests=y --vrf_loader_fbx=y --policies=build.ccache:y
 
       - name: Build
         run: git config --global pull.rebase false && xmake repo -u && xmake build -vD -y

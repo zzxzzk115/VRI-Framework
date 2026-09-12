@@ -1,7 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <filesystem>
-#include <vrf/asset/loaders/fbx_loader.hpp>
+#include <vrf/vrf.hpp>
 
 TEST_CASE("FBX loader reports unavailable or missing input without modifying output")
 {
@@ -12,6 +12,25 @@ TEST_CASE("FBX loader reports unavailable or missing input without modifying out
 }
 
 #ifdef VRF_TEST_FBX
+TEST_CASE("FBX Phong transparency preserves opacity and alpha mode")
+{
+    for (const bool transparent : {false, true})
+    {
+        const auto path =
+            (std::filesystem::path(VRF_TEST_ASSET_DIR) / (transparent ? "fbx_transparent.fbx" : "fbx_static.fbx"))
+                .string();
+        vrf::Mesh mesh;
+        REQUIRE(vrf::LoadFbx(path, mesh).has_value());
+        REQUIRE(mesh.materials.size() == 1);
+        const auto& material = mesh.materials[0];
+        const auto* phong    = std::get_if<vrf::PhongMaterial>(&material.core);
+        REQUIRE(phong);
+        CHECK(phong->opacity == doctest::Approx(transparent ? 0.25f : 1.0f));
+        CHECK(phong->diffuse.a == doctest::Approx(phong->opacity));
+        CHECK(material.alphaMode == (transparent ? vrf::AlphaMode::Blend : vrf::AlphaMode::Opaque));
+    }
+}
+
 TEST_CASE("FBX static import bakes hierarchy, reflected winding, units and normal convention")
 {
     const auto            path = (std::filesystem::path(VRF_TEST_ASSET_DIR) / "fbx_static.fbx").string();

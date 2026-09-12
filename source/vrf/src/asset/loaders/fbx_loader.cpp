@@ -41,6 +41,27 @@ namespace vrf
         };
 
         glm::dmat4 Matrix(const ofbx::DMatrix& value) { return glm::make_mat4(value.m); }
+
+        float Opacity(const ofbx::Material& material)
+        {
+            // OpenFBX v0.9 has no transparency accessor; retain the authored FBX property.
+            for (auto* group = material.element.getFirstChild(); group; group = group->getSibling())
+            {
+                if (Text(group->getID()) != "Properties70")
+                    continue;
+                for (auto* entry = group->getFirstChild(); entry; entry = entry->getSibling())
+                {
+                    auto* value = entry->getFirstProperty();
+                    if (Text(entry->getID()) != "P" || !value || Text(value->getValue()) != "TransparencyFactor")
+                        continue;
+                    for (int i = 0; i < 4 && value; ++i)
+                        value = value->getNext();
+                    if (value)
+                        return std::clamp(1.0f - static_cast<float>(value->getValue().toDouble()), 0.0f, 1.0f);
+                }
+            }
+            return 1.0f;
+        }
     } // namespace
 
     Expected<void> LoadFbx(std::string_view path, Mesh& out, const FbxImportOptions& options)
@@ -128,9 +149,11 @@ namespace vrf
             else
             {
                 PhongMaterial phong;
-                const auto    specular = source->getSpecularColor();
+                phong.opacity       = Opacity(*source);
+                const auto specular = source->getSpecularColor();
                 phong.diffuse =
-                    Vec4(Vec3(diffuse.r, diffuse.g, diffuse.b) * static_cast<float>(source->getDiffuseFactor()), 1.0f);
+                    Vec4(Vec3(diffuse.r, diffuse.g, diffuse.b) * static_cast<float>(source->getDiffuseFactor()),
+                         phong.opacity);
                 phong.specular =
                     Vec3(specular.r, specular.g, specular.b) * static_cast<float>(source->getSpecularFactor());
                 phong.shininess = static_cast<float>(source->getShininess());
@@ -141,6 +164,8 @@ namespace vrf
                 phong.normalTexture   = refs[ofbx::Texture::NORMAL];
                 phong.emissiveTexture = refs[ofbx::Texture::EMISSIVE];
                 material.core         = phong;
+                if (phong.opacity < 1.0f)
+                    material.alphaMode = AlphaMode::Blend;
             }
             const int index = static_cast<int>(mesh.materials.size());
             mesh.materials.push_back(std::move(material));

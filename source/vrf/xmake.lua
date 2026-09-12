@@ -25,7 +25,7 @@ target("vrf")
     add_packages("stb", "tinyobjloader", "tinygltf")
     if has_config("vrf_loader_fbx") then
         add_defines("VRF_ENABLE_FBX")
-        add_packages("openfbx")
+        add_packages("openfbx", {public = true})
     end
 
     -- vshadersystem runtime loader: used only inside gpu/shader_library.cpp (PImpl), so its

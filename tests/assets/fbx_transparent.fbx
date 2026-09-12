@@ -1,0 +1,64 @@
+; FBX 7.4.0 project-generated regression fixture. No third-party asset content.
+FBXHeaderExtension: {
+    FBXHeaderVersion: 1003
+    FBXVersion: 7400
+}
+GlobalSettings: {
+    Version: 1000
+    Properties70: {
+        P: "UpAxis", "int", "Integer", "", 1
+        P: "UpAxisSign", "int", "Integer", "", 1
+        P: "UnitScaleFactor", "double", "Number", "", 1
+    }
+}
+Objects: {
+    Model: 1, "Model::Parent", "Null" {
+        Properties70: {
+            P: "Lcl Translation", "Lcl Translation", "", "A", 100, 0, 0
+        }
+    }
+    Model: 2, "Model::Triangle", "Mesh" {
+        Properties70: {
+            P: "Lcl Scaling", "Lcl Scaling", "", "A", -1, 2, 1
+        }
+    }
+    Geometry: 3, "Geometry::Triangle", "Mesh" {
+        Vertices: *9 { a: 0,0,0,100,0,0,0,100,0 }
+        PolygonVertexIndex: *3 { a: 0,1,-3 }
+        LayerElementNormal: 0 {
+            MappingInformationType: "ByPolygonVertex"
+            ReferenceInformationType: "Direct"
+            Normals: *9 { a: 0,0,1,0,0,1,0,0,1 }
+        }
+        LayerElementUV: 0 {
+            MappingInformationType: "ByPolygonVertex"
+            ReferenceInformationType: "Direct"
+            UV: *6 { a: 0,0,1,0,0,1 }
+        }
+        LayerElementMaterial: 0 {
+            MappingInformationType: "AllSame"
+            ReferenceInformationType: "IndexToDirect"
+            Materials: *1 { a: 0 }
+        }
+    }
+    Material: 4, "Material::Fixture.DoubleSided", "" {
+        ShadingModel: "phong"
+        Properties70: {
+            P: "DiffuseColor", "Color", "", "A", 0.2, 0.4, 0.6
+            P: "TransparencyFactor", "Number", "", "A", 0.75
+            P: "SpecularFactor", "Number", "", "A", 0
+        }
+    }
+    Texture: 5, "Texture::Diffuse", "" {
+        Type: "TextureVideoClip"
+        FileName: "rgba8_2x2.dds"
+        RelativeFilename: "rgba8_2x2.dds"
+    }
+}
+Connections: {
+    C: "OO", 1, 0
+    C: "OO", 2, 1
+    C: "OO", 3, 2
+    C: "OO", 4, 2
+    C: "OP", 5, 4, "DiffuseColor"
+}
