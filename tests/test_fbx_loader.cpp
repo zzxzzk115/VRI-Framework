@@ -15,12 +15,19 @@ TEST_CASE("FBX loader reports unavailable or missing input without modifying out
 }
 
 #ifdef VRF_TEST_FBX
-TEST_CASE("FBX accepts small invertible transforms and rejects zero scale")
+TEST_CASE("FBX accepts invertible transforms across scales and rejects zero scale")
 {
     std::ifstream input(std::filesystem::path(VRF_TEST_ASSET_DIR) / "fbx_static.fbx", std::ios::binary);
     REQUIRE(input.good());
     const std::string original((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
-    for (const auto scale : {"1e-6, 1e-6, 1e-6", "-1e-6, 1e-6, 1e-6", "1e-8, 2e-6, 1e-4", "0, 1, 1"})
+    for (const auto scale : {"1e-6, 1e-6, 1e-6",
+                             "-1e-6, 1e-6, 1e-6",
+                             "1e-8, 2e-6, 1e-4",
+                             "1, 1, 1e13",
+                             "-1, 1, 1e13",
+                             "1, 1, 1e200",
+                             "1, 1, 1e-200",
+                             "0, 1, 1"})
     {
         INFO(std::string(scale));
         std::string       text              = original;
@@ -91,6 +98,9 @@ TEST_CASE("FBX invalid geometry and texture paths preserve the Expected error co
     for (const auto& invalid :
          {InvalidInput {"Normals: *9 { a: 0,0,1,0,0,1,0,0,1 }",
                         "Normals: *9 { a: 0,0,1e309,0,0,1,0,0,1 }",
+                        "invalid position or normal"},
+          InvalidInput {"Normals: *9 { a: 0,0,1,0,0,1,0,0,1 }",
+                        "Normals: *9 { a: 0,0,0,0,0,1,0,0,1 }",
                         "invalid position or normal"},
           InvalidInput {"rgba8_2x2.dds", std::string(300, 'x') + ".dds", "texture", true},
           InvalidInput {"UV: *6 { a: 0,0,1,0,0,1 }", "UV: *6 { a: 1e309,0,1,0,0,1 }", "invalid texture coordinate"},
