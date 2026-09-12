@@ -210,7 +210,8 @@ namespace vrf
                                  std::string(source->name));
             const glm::dmat4 transform   = Matrix(source->getGlobalTransform()) * Matrix(source->getGeometricMatrix());
             const double     determinant = glm::determinant(glm::dmat3(transform));
-            if (!std::isfinite(determinant) || std::abs(determinant) < 1e-15)
+            // An absolute epsilon rejects valid small scales; validate the transformed attributes below.
+            if (!std::isfinite(determinant) || determinant == 0.0)
                 return MakeError("LoadFbx: singular mesh transform");
             const auto normalTransform = glm::transpose(glm::inverse(glm::dmat3(transform)));
             std::unordered_map<VertexKey, uint32_t, VertexHash> vertices;

@@ -15,6 +15,67 @@ TEST_CASE("FBX loader reports unavailable or missing input without modifying out
 }
 
 #ifdef VRF_TEST_FBX
+TEST_CASE("FBX accepts small invertible transforms and rejects zero scale")
+{
+    std::ifstream input(std::filesystem::path(VRF_TEST_ASSET_DIR) / "fbx_static.fbx", std::ios::binary);
+    REQUIRE(input.good());
+    const std::string original((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+    for (const auto scale : {"1e-6, 1e-6, 1e-6", "-1e-6, 1e-6, 1e-6", "1e-8, 2e-6, 1e-4", "0, 1, 1"})
+    {
+        INFO(std::string(scale));
+        std::string       text              = original;
+        const std::string translation       = "\"Lcl Translation\", \"Lcl Translation\", \"\", \"A\", 100, 0, 0";
+        const auto        translationOffset = text.find(translation);
+        REQUIRE(translationOffset != std::string::npos);
+        text.replace(
+            translationOffset, translation.size(), "\"Lcl Translation\", \"Lcl Translation\", \"\", \"A\", 0, 0, 0");
+        const std::string needle = "\"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\", -1, 2, 1";
+        const auto        offset = text.find(needle);
+        REQUIRE(offset != std::string::npos);
+        text.replace(offset, needle.size(), std::string("\"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\", ") + scale);
+        struct TemporaryFbx
+        {
+            std::filesystem::path path;
+            ~TemporaryFbx()
+            {
+                std::error_code error;
+                std::filesystem::remove(path, error);
+            }
+        } temporary {
+            std::filesystem::temp_directory_path() /
+            ("vrf-scale-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + ".fbx")};
+        {
+            std::ofstream output(temporary.path, std::ios::binary);
+            output << text;
+            REQUIRE(output.good());
+        }
+        vrf::Mesh mesh;
+        mesh.name = "sentinel";
+        vrf::FbxImportOptions options;
+        options.loadTextures = false;
+        const auto result    = vrf::LoadFbx(temporary.path.string(), mesh, options);
+        if (scale[0] == '0')
+        {
+            REQUIRE_FALSE(result.has_value());
+            CHECK(result.error().message.find("singular mesh transform") != std::string::npos);
+            CHECK(mesh.name == "sentinel");
+            CHECK(mesh.positions.empty());
+            continue;
+        }
+        CHECK(result.has_value());
+        if (!result)
+            continue;
+        REQUIRE(mesh.positions.size() == 3);
+        REQUIRE(mesh.indices.size() == 3);
+        const auto a = mesh.positions[mesh.indices[0]];
+        const auto b = mesh.positions[mesh.indices[1]];
+        const auto c = mesh.positions[mesh.indices[2]];
+        CHECK(glm::dot(glm::cross(b - a, c - a), mesh.normals[mesh.indices[0]]) > 0);
+        for (const auto& normal : mesh.normals)
+            CHECK(glm::length(normal) == doctest::Approx(1));
+    }
+}
+
 TEST_CASE("FBX invalid geometry and texture paths preserve the Expected error contract")
 {
     const auto    fixture = std::filesystem::path(VRF_TEST_ASSET_DIR) / "fbx_static.fbx";
