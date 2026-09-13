@@ -2,6 +2,7 @@
 
 #include <cstring>
 #include <functional>
+#include <string>
 #include <vector>
 
 #include "vrf/gpu/render_device.hpp"
@@ -305,6 +306,9 @@ namespace vrf
 
         const VriCoreInterface& c     = device.Core();
         const FormatBlockInfo   block = GetFormatBlockInfo(texture.format);
+        if (c.GetFormatSupport && (c.GetFormatSupport(device.Handle(), texture.format) & VriFormatSupport_Texture) == 0)
+            return MakeError("UploadTexture: backend does not support sampled texture format " +
+                             std::to_string(static_cast<int>(texture.format)));
 
         const uint32_t mipLevels   = texture.mipLevels > 0 ? texture.mipLevels : 1;
         const uint32_t arrayLayers = texture.arrayLayers > 0 ? texture.arrayLayers : 1;

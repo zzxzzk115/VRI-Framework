@@ -23,6 +23,10 @@ target("vrf")
     -- Loader implementations: single-header libs compiled into this static lib, so
     -- they are private (consumers don't need them). dds-ktx is vendored in src/.
     add_packages("stb", "tinyobjloader", "tinygltf")
+    if has_config("vrf_loader_fbx") then
+        add_defines("VRF_ENABLE_FBX")
+        add_packages("openfbx", {public = true})
+    end
 
     -- vshadersystem runtime loader: used only inside gpu/shader_library.cpp (PImpl), so its
     -- headers don't reach the public API - but it is a real static lib (unlike the header-only

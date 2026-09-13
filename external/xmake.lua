@@ -45,6 +45,9 @@ end
 add_requires("stb")
 add_requires("tinyobjloader")
 add_requires("tinygltf")
+if has_config("vrf_loader_fbx") then
+    add_requires("openfbx v0.9")
+end
 
 -- libktx (opt-in): pulls a heavier CMake/astc-encoder/zstd chain. Shared by the KTX2
 -- texture loader and the asset cache's BC7 bake, which uses its UASTC encoder.
