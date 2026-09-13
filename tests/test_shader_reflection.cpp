@@ -89,7 +89,7 @@ TEST_CASE("shader reflection: the cooked descriptor table round-trips")
     }
 }
 
-TEST_CASE("shader reflection: the table is the BASE variant's, shared by every variant")
+TEST_CASE("shader reflection: legacy v1.2.0 cooks share the BASE variant's table")
 {
     // The limitation every consumer has to design around, pinned here because it is invisible
     // otherwise and fatal to build on. vshadersystem v1.2.0 specializes the BYTECODE per variant
@@ -100,8 +100,8 @@ TEST_CASE("shader reflection: the table is the BASE variant's, shared by every v
     // - is the dangerous direction: the reflection then UNDER-reports, and a layout derived from it
     // is short, which is a first-frame device hang with no validation message.
     //
-    // When the cooker starts emitting per-variant reflection this test fails, which is exactly
-    // when every consumer wants to hear about it.
+    // Keep this legacy fixture unchanged: upgrading the loader cannot repair old cooked tables.
+    // The separate v1.2.1 fixture below verifies per-variant reflection from the newer cooker.
     auto lib = vrf::ShaderLibrary::LoadFromFile(kFixture);
     REQUIRE(lib.has_value());
 
@@ -130,4 +130,31 @@ TEST_CASE("shader reflection: the table is the BASE variant's, shared by every v
     REQUIRE(extra != nullptr);
     CHECK(extra->binding == 5);
     CHECK(extra->kind == vrf::DescriptorKind::SampledImage);
+}
+
+TEST_CASE("shader reflection: v1.2.1 cooks preserve each variant's bindings and bytecode")
+{
+    auto lib = vrf::ShaderLibrary::LoadFromFile(std::string(VRF_TEST_ASSET_DIR) + "/reflection_fixture_1_2_1.vshlib");
+    REQUIRE(lib.has_value());
+
+    const vrf::ResolvedShader base  = ResolveFixture(*lib, 0);
+    const vrf::ResolvedShader gated = ResolveFixture(*lib, 1);
+    REQUIRE(base.reflection != nullptr);
+    REQUIRE(gated.reflection != nullptr);
+    CHECK(base.isBaseVariant);
+    CHECK_FALSE(gated.isBaseVariant);
+    CHECK(base.reflection->Find("t_Extra") != nullptr);
+    CHECK(gated.reflection->Find("t_Extra") == nullptr);
+    CHECK(base.reflection->descriptors.size() == gated.reflection->descriptors.size() + 1);
+    for (const auto* shader : {&base, &gated})
+    {
+        REQUIRE(shader->spirv != nullptr);
+        CHECK(shader->spirvSize > 0);
+        REQUIRE(shader->wgsl != nullptr);
+        CHECK(shader->wgslSize > 0);
+        CHECK(shader->reflection->Find("u_Params") != nullptr);
+        CHECK(shader->reflection->localSize[0] == 8);
+        CHECK(shader->reflection->localSize[1] == 4);
+        CHECK(shader->reflection->localSize[2] == 1);
+    }
 }

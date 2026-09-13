@@ -1,3 +1,6 @@
+// Keep reflection_fixture.vshlib as the legacy v1.2.0 compatibility fixture.
+// Regenerate the v1.2.1 fixture with vshaderc v1.2.1:
+//   vshaderc build --shader_root tests/assets -o tests/assets/reflection_fixture_1_2_1.vshlib --targets spirv,wgsl reflection_fixture.slang
 // The source of reflection_fixture.vshlib (committed beside it), cooked with vshaderc v1.2.0:
 //
 //   vshaderc build --shader_root tests/assets --out tests/assets/reflection_fixture.vshlib \
