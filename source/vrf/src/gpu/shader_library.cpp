@@ -75,8 +75,61 @@ namespace vrf
         static_assert(vsh::eStageRchit == static_cast<uint32_t>(ShaderStageMask::ClosestHit));
         static_assert(vsh::eStageDomain == static_cast<uint32_t>(ShaderStageMask::TessEval));
 
-        ShaderReflection MirrorReflection(const vsh::ShaderReflection& src)
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eFloat) == static_cast<uint8_t>(ReflectedParamType::Float));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eVec2) == static_cast<uint8_t>(ReflectedParamType::Vec2));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eVec3) == static_cast<uint8_t>(ReflectedParamType::Vec3));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eVec4) == static_cast<uint8_t>(ReflectedParamType::Vec4));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eInt) == static_cast<uint8_t>(ReflectedParamType::Int));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eUInt) == static_cast<uint8_t>(ReflectedParamType::UInt));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eBool) == static_cast<uint8_t>(ReflectedParamType::Bool));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eMat3) == static_cast<uint8_t>(ReflectedParamType::Mat3));
+        static_assert(static_cast<uint8_t>(vsh::ParamType::eMat4) == static_cast<uint8_t>(ReflectedParamType::Mat4));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eNever) == static_cast<uint8_t>(ReflectedCompareOp::Never));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eLess) == static_cast<uint8_t>(ReflectedCompareOp::Less));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eEqual) == static_cast<uint8_t>(ReflectedCompareOp::Equal));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eLessOrEqual) ==
+                      static_cast<uint8_t>(ReflectedCompareOp::LessOrEqual));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eGreater) ==
+                      static_cast<uint8_t>(ReflectedCompareOp::Greater));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eNotEqual) ==
+                      static_cast<uint8_t>(ReflectedCompareOp::NotEqual));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eGreaterOrEqual) ==
+                      static_cast<uint8_t>(ReflectedCompareOp::GreaterOrEqual));
+        static_assert(static_cast<uint8_t>(vsh::CompareOp::eAlways) ==
+                      static_cast<uint8_t>(ReflectedCompareOp::Always));
+        static_assert(static_cast<uint8_t>(vsh::CullMode::eNone) == static_cast<uint8_t>(ReflectedCullMode::None));
+        static_assert(static_cast<uint8_t>(vsh::CullMode::eBack) == static_cast<uint8_t>(ReflectedCullMode::Back));
+        static_assert(static_cast<uint8_t>(vsh::CullMode::eFront) == static_cast<uint8_t>(ReflectedCullMode::Front));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eZero) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::Zero));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eOne) == static_cast<uint8_t>(ReflectedBlendFactor::One));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eSrcColor) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::SrcColor));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eOneMinusSrcColor) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::OneMinusSrcColor));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eDstColor) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::DstColor));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eOneMinusDstColor) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::OneMinusDstColor));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eSrcAlpha) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::SrcAlpha));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eOneMinusSrcAlpha) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::OneMinusSrcAlpha));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eDstAlpha) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::DstAlpha));
+        static_assert(static_cast<uint8_t>(vsh::BlendFactor::eOneMinusDstAlpha) ==
+                      static_cast<uint8_t>(ReflectedBlendFactor::OneMinusDstAlpha));
+        static_assert(static_cast<uint8_t>(vsh::BlendOp::eAdd) == static_cast<uint8_t>(ReflectedBlendOp::Add));
+        static_assert(static_cast<uint8_t>(vsh::BlendOp::eSubtract) ==
+                      static_cast<uint8_t>(ReflectedBlendOp::Subtract));
+        static_assert(static_cast<uint8_t>(vsh::BlendOp::eReverseSubtract) ==
+                      static_cast<uint8_t>(ReflectedBlendOp::ReverseSubtract));
+        static_assert(static_cast<uint8_t>(vsh::BlendOp::eMin) == static_cast<uint8_t>(ReflectedBlendOp::Min));
+        static_assert(static_cast<uint8_t>(vsh::BlendOp::eMax) == static_cast<uint8_t>(ReflectedBlendOp::Max));
+
+        ShaderReflection MirrorReflection(const vsh::ShaderBinary& binary)
         {
+            const auto&      src = binary.reflection;
             ShaderReflection out;
             out.descriptors.reserve(src.descriptors.size());
             for (const vsh::DescriptorBinding& d : src.descriptors)
@@ -110,6 +163,32 @@ namespace vrf
             out.localSize[0] = src.localSizeX;
             out.localSize[1] = src.localSizeY;
             out.localSize[2] = src.localSizeZ;
+
+            out.vertexInputs.reserve(src.vertexInputs.size());
+            for (const auto& input : src.vertexInputs)
+                out.vertexInputs.push_back({.name     = input.name,
+                                            .semantic = input.semantic,
+                                            .location = input.location,
+                                            .type     = static_cast<ReflectedParamType>(input.type)});
+
+            const auto& state = binary.materialDesc.renderState;
+            out.renderState   = {
+                  .depthTest       = state.depthTest,
+                  .depthWrite      = state.depthWrite,
+                  .depthFunc       = static_cast<ReflectedCompareOp>(state.depthFunc),
+                  .cull            = static_cast<ReflectedCullMode>(state.cull),
+                  .blendEnable     = state.blendEnable,
+                  .srcColor        = static_cast<ReflectedBlendFactor>(state.srcColor),
+                  .dstColor        = static_cast<ReflectedBlendFactor>(state.dstColor),
+                  .colorOp         = static_cast<ReflectedBlendOp>(state.colorOp),
+                  .srcAlpha        = static_cast<ReflectedBlendFactor>(state.srcAlpha),
+                  .dstAlpha        = static_cast<ReflectedBlendFactor>(state.dstAlpha),
+                  .alphaOp         = static_cast<ReflectedBlendOp>(state.alphaOp),
+                  .colorMask       = state.colorMask,
+                  .alphaToCoverage = state.alphaToCoverage,
+                  .depthBiasFactor = state.depthBiasFactor,
+                  .depthBiasUnits  = state.depthBiasUnits,
+            };
             return out;
         }
     } // namespace
@@ -174,7 +253,7 @@ namespace vrf
             const size_t index = impl->binaries.size();
             impl->binaries.push_back(std::move(bin.value()));
             const vsh::ShaderBinary& stored = impl->binaries[index];
-            impl->reflections.push_back(MirrorReflection(stored.reflection));
+            impl->reflections.push_back(MirrorReflection(stored));
             impl->byVariantHash.emplace(entry.variantHash, index);
 
             const uint64_t key = ShaderStageKey(stored.shaderIdHash, entry.stage);
@@ -212,6 +291,16 @@ namespace vrf
                                                     ShaderStage                       stage,
                                                     const std::vector<ShaderKeyword>& keywords) const
     {
+        auto result = ResolveHash(vsh::shader_id_hash(shaderId), stage, keywords);
+        if (!result)
+            result.error().message += ": " + std::string(shaderId);
+        return result;
+    }
+
+    Expected<ResolvedShader> ShaderLibrary::ResolveHash(uint64_t                          shaderIdHash,
+                                                        ShaderStage                       stage,
+                                                        const std::vector<ShaderKeyword>& keywords) const
+    {
         if (!m_impl)
             return MakeError(VriResult_Failure, "ShaderLibrary::Resolve: library not loaded");
 
@@ -219,13 +308,13 @@ namespace vrf
         if (!vshStage)
             return std::unexpected(vshStage.error());
 
-        const uint64_t shaderIdHash = vsh::shader_id_hash(shaderId);
-        const uint64_t key          = ShaderStageKey(shaderIdHash, *vshStage);
+        const uint64_t key = ShaderStageKey(shaderIdHash, *vshStage);
 
         const auto declaredIt = m_impl->permuteKeywords.find(key);
         if (declaredIt == m_impl->permuteKeywords.end())
             return MakeError(VriResult_Failure,
-                             "ShaderLibrary::Resolve: no such shader/stage in library: " + std::string(shaderId));
+                             "ShaderLibrary::Resolve: no such shader/stage in library (ID hash " +
+                                 std::to_string(shaderIdHash) + ")");
 
         // Build the variant key from exactly the declared permute keywords (order-independent -
         // VariantKey::build sorts internally), pulling each value from the supplied set (default 0).
@@ -253,8 +342,8 @@ namespace vrf
         const auto     hit         = m_impl->byVariantHash.find(variantHash);
         if (hit == m_impl->byVariantHash.end())
             return MakeError(VriResult_Failure,
-                             "ShaderLibrary::Resolve: no variant for the requested keyword set of " +
-                                 std::string(shaderId));
+                             "ShaderLibrary::Resolve: no variant for the requested keyword set (ID hash " +
+                                 std::to_string(shaderIdHash) + ")");
 
         const vsh::ShaderBinary& bin = m_impl->binaries[hit->second];
         ResolvedShader           out;

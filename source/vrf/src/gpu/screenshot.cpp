@@ -102,8 +102,12 @@ namespace vrf
         if (decode == Decode::Unsupported)
             return MakeError("ReadbackTexture: unsupported format (need RGBA16_SFLOAT, RGBA8, or BGRA8)");
 
-        const uint64_t rowPitch = uint64_t {w} * texelSize; // tight packing
-        const uint64_t bytes    = rowPitch * h;
+        const uint64_t tightPitch = uint64_t {w} * texelSize;
+        // WebGPU buffer/texture command copies require a 256-byte row pitch. Keep that
+        // padding in staging only; HostImage still exposes tightly packed pixels.
+        const uint64_t rowPitch =
+            device.Api() == VriGraphicsAPI_WebGPU ? (tightPitch + 255) & ~uint64_t {255} : tightPitch;
+        const uint64_t bytes = rowPitch * h;
 
         VriBuffer*          staging = nullptr;
         const VriBufferDesc bd {.size            = bytes,
@@ -132,7 +136,7 @@ namespace vrf
 
         const VriBufferTextureCopyDesc region {
             .bufferOffset      = 0,
-            .bufferRowLength   = 0, // 0 = tightly packed (w texels)
+            .bufferRowLength   = static_cast<uint32_t>(rowPitch / texelSize),
             .bufferImageHeight = 0,
             .texture           = {.baseLayer = 0, .layerNum = 1, .aspect = VriImageAspect_Color}};
         core.CmdReadbackTextureToBuffer(cmd, staging, texture.Handle(), &region);
