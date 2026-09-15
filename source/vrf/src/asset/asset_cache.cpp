@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -15,17 +16,17 @@
 
 #if defined(VRF_ENABLE_BAKE_BC7)
 #include <ktx.h>
+#endif
 #if defined(_WIN32)
 // NOMINMAX: windows.h defines min/max as macros, which breaks every std::max below.
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
-#elif defined(__APPLE__)
+#elif defined(VRF_ENABLE_BAKE_BC7) && defined(__APPLE__)
 #include <mach/mach.h>
 #include <mach/mach_host.h>
-#elif defined(__linux__)
+#elif defined(VRF_ENABLE_BAKE_BC7) && defined(__linux__)
 #include <unistd.h>
-#endif
 #endif
 
 namespace vrf
@@ -529,11 +530,8 @@ namespace vrf
 #if defined(VRF_ENABLE_BAKE_BC7)
         // Block-compress one RGBA8 texture (with its mip chain) to BC7, in place.
         //
-        // UASTC rather than ETC1S: UASTC is the visually-lossless mode, and it is designed to
-        // transcode into BC7 with almost no further loss. The transcode runs here, offline, so
-        // the cache stores hardware-decodable BC7 and startup stays a plain read - the whole
-        // point of the cache. Storing UASTC instead would be ~half the disk but would put a
-        // multi-second transcode back into every launch.
+        // Encode UASTC and transcode to hardware-decodable BC7 at bake time.
+        // Both use 16-byte blocks before optional supercompression; neither is lossless.
         bool CompressTextureBc7(Texture& texture)
         {
             if (texture.compressed || texture.data.empty())
@@ -724,6 +722,7 @@ namespace vrf
                 }
             }
             std::vector<std::thread> pool;
+            LogInfo("asset cache: libktx UASTC -> BC7, CPU workers={}", workers);
             pool.reserve(workers);
             for (unsigned w = 0; w < workers; ++w)
             {
@@ -757,7 +756,10 @@ namespace vrf
                     after / (1024 * 1024));
         }
 #else
-        void CompressTexturesBc7(Mesh&) {}
+        void CompressTexturesBc7(Mesh&)
+        {
+            LogInfo("asset cache: BC7 disabled at build time; retaining decoded texture payloads");
+        }
 #endif
     } // namespace
 
@@ -825,11 +827,18 @@ namespace vrf
         }
 
         std::error_code ec;
+#if defined(_WIN32)
+        if (!MoveFileExW(tempPath.c_str(), finalPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+            ec = std::error_code(static_cast<int>(GetLastError()), std::system_category());
+#else
         fs::rename(tempPath, finalPath, ec);
+#endif
         if (ec)
         {
-            fs::remove(tempPath, ec);
-            return MakeError("WriteBakedMesh: rename failed for " + finalPath.string());
+            const std::string reason = ec.message();
+            std::error_code cleanupError;
+            fs::remove(tempPath, cleanupError);
+            return MakeError("WriteBakedMesh: rename failed for " + finalPath.string() + ": " + reason);
         }
         return {};
     }
@@ -918,11 +927,14 @@ namespace vrf
             return LoadGltf(path, out, options);
         };
 
-        if (!cache.enabled)
+        // The v1 cache does not encode import options. A texture-free request must
+        // neither consume a textured cache nor replace it with a partial mesh.
+        if (!cache.enabled || !options.loadTextures)
             return loadSource();
 
         const std::string cachePath = cache.cachePath.empty() ? std::string(path) + ".vrfcache" : cache.cachePath;
 
+        const auto started = std::chrono::steady_clock::now();
         if (auto hit = ReadBakedMesh(cachePath, path, out); hit)
         {
             LogInfo("asset cache: hit {} ({} vertices, {} submeshes, {} textures)",
@@ -933,8 +945,10 @@ namespace vrf
             return {};
         }
 
+        const auto missed = std::chrono::steady_clock::now();
         if (auto loaded = loadSource(); !loaded)
             return loaded;
+        const auto loaded = std::chrono::steady_clock::now();
 
         if (!cache.write)
             return {};
@@ -948,13 +962,28 @@ namespace vrf
             out.attributes |= VertexAttribute::Tangent;
         }
 
+        const auto tangentsReady = std::chrono::steady_clock::now();
         CompressTexturesBc7(out);
+        const auto texturesReady = std::chrono::steady_clock::now();
 
         // A bake failure must not fail the load - the mesh in `out` is already good.
         if (auto baked = WriteBakedMesh(cachePath, path, out); !baked)
             LogWarning("asset cache: could not bake {}: {}", cachePath, baked.error().message);
         else
             LogInfo("asset cache: baked {}", cachePath);
+
+        const auto finished = std::chrono::steady_clock::now();
+        const auto ms = [](auto duration) { return std::chrono::duration<double, std::milli>(duration).count(); };
+        LogInfo("asset cache: CPU wall ms lookup={}, source={}, tangents={}, BC7={}, write={} ({})",
+                ms(missed - started), ms(loaded - missed), ms(tangentsReady - loaded),
+                ms(texturesReady - tangentsReady), ms(finished - texturesReady), cachePath);
+        const uint64_t textureBytes = std::accumulate(out.textures.begin(), out.textures.end(), uint64_t {0},
+            [](uint64_t sum, const Texture& texture) { return sum + texture.SizeBytes(); });
+        const uint64_t geometryBytes = out.positions.size() * sizeof(Vec3) + out.normals.size() * sizeof(Vec3) +
+            out.tangents.size() * sizeof(Vec4) + out.colors.size() * sizeof(Vec4) +
+            out.texCoords0.size() * sizeof(Vec2) + out.texCoords1.size() * sizeof(Vec2) +
+            out.indices.size() * sizeof(uint32_t);
+        LogInfo("asset cache: payload bytes geometry={}, textures={} ({})", geometryBytes, textureBytes, cachePath);
 
         return {};
     }

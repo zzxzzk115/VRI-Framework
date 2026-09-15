@@ -9,6 +9,8 @@
 
 #include <vrf/asset/loaders/gltf_loader.hpp>
 #include <vrf/asset/loaders/obj_loader.hpp>
+#include <vrf/asset/loaders/image_loader.hpp>
+#include <vrf/asset/asset_cache.hpp>
 
 // Self-contained mesh-loader coverage: inputs are synthesized in code (a text OBJ and a
 // glTF + external .bin), so CI needs no external asset files.
@@ -114,4 +116,66 @@ TEST_CASE("glTF loader rejects Draco-required files (synthetic)")
     CHECK_FALSE(vrf::LoadGltf(path.string(), mesh).has_value());
 
     std::filesystem::remove(path);
+}
+
+TEST_CASE("glTF mip generation preserves base pixels and rounded box filter")
+{
+    namespace fs = std::filesystem;
+    const auto dir = fs::temp_directory_path() / "vrf_test_gltf_mips";
+    fs::create_directories(dir);
+    fs::copy_file(fs::path(VRF_TEST_ASSET_DIR) / "rgba8_2x2.png", dir / "image.png",
+                  fs::copy_options::overwrite_existing);
+    const auto source = dir / "mesh.gltf";
+    {
+        std::ofstream file(source);
+        file << R"({"asset":{"version":"2.0"},"images":[{"uri":"image.png"}]})";
+    }
+    vrf::Texture original;
+    REQUIRE(vrf::LoadImage((dir / "image.png").string(), original).has_value());
+    vrf::Mesh mesh;
+    REQUIRE(vrf::LoadGltf(source.string(), mesh).has_value());
+    REQUIRE(mesh.textures.size() == 1);
+    const auto& texture = mesh.textures[0];
+    REQUIRE(texture.data.size() == 20);
+    CHECK(texture.mipLevels == 2);
+    REQUIRE(texture.subresources.size() == 2);
+    CHECK(texture.subresources[1].offset == 16);
+    for (size_t i = 0; i < 16; ++i)
+        CHECK(texture.data[i] == original.data[i]);
+    for (size_t c = 0; c < 4; ++c)
+        CHECK(texture.data[16 + c] ==
+              (original.data[c] + original.data[4 + c] + original.data[8 + c] + original.data[12 + c] + 2) / 4);
+
+    const auto cache = source.string() + ".vrfcache";
+    REQUIRE(vrf::WriteBakedMesh(cache, source.string(), mesh).has_value());
+    mesh.name = "replacement";
+    REQUIRE(vrf::WriteBakedMesh(cache, source.string(), mesh).has_value());
+    REQUIRE(vrf::ReadBakedMesh(cache, source.string(), mesh).has_value());
+    CHECK(mesh.name == "replacement");
+    const auto cacheSize = fs::file_size(cache);
+    vrf::GltfImportOptions options;
+    options.loadTextures = false;
+    REQUIRE(vrf::LoadModelCached(source.string(), mesh, options).has_value());
+    CHECK(mesh.textures.empty());
+    CHECK(fs::file_size(cache) == cacheSize);
+    REQUIRE(vrf::ReadBakedMesh(cache, source.string(), mesh).has_value());
+    CHECK(mesh.textures.size() == 1);
+
+    fs::remove(cache);
+    fs::remove(source);
+    fs::remove(dir / "image.png");
+    fs::remove(dir);
+}
+
+TEST_CASE("glTF geometry-only import does not decode image bytes")
+{
+    const auto source = WriteText("vrf_test_no_image_decode.gltf",
+        R"({"asset":{"version":"2.0"},"images":[{"uri":"data:image/png;base64,YWJjZA=="}]})");
+    vrf::Mesh mesh;
+    vrf::GltfImportOptions options;
+    options.loadTextures = false;
+    CHECK(vrf::LoadGltf(source.string(), mesh, options).has_value());
+    CHECK(mesh.textures.empty());
+    CHECK_FALSE(vrf::LoadGltf(source.string(), mesh).has_value());
+    std::filesystem::remove(source);
 }

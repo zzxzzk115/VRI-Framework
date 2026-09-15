@@ -1,6 +1,7 @@
 #include "vrf/asset/loaders/gltf_loader.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -46,13 +47,21 @@ namespace vrf
             if (mipCount <= 1)
                 return;
 
-            std::vector<uint8_t>            out;
+            std::vector<uint8_t>            out = std::move(tex.data);
             std::vector<TextureSubresource> subs;
-            out.reserve(tex.data.size() * 4 / 3 + 16);
+            size_t totalBytes = 0;
+            for (uint32_t mw = tex.width, mh = tex.height;; mw = std::max(1u, mw / 2), mh = std::max(1u, mh / 2))
+            {
+                totalBytes += static_cast<size_t>(mw) * mh * 4;
+                if (mw == 1 && mh == 1)
+                    break;
+            }
+            out.reserve(totalBytes);
+            subs.reserve(mipCount);
 
-            // mip 0 (copied verbatim from the incoming image)
+            // Retain mip 0's storage; append only the derived levels.
             uint32_t w = tex.width, h = tex.height;
-            out.insert(out.end(), tex.data.begin(), tex.data.begin() + static_cast<size_t>(w) * h * 4);
+            out.resize(static_cast<size_t>(w) * h * 4);
             subs.push_back({0, 0, 0, static_cast<uint64_t>(w) * h * 4, w, h, 0});
 
             uint64_t prevOff = 0;
@@ -326,12 +335,17 @@ namespace vrf
 
     Expected<void> LoadGltf(std::string_view path, Mesh& out, const GltfImportOptions& options)
     {
+        const auto started = std::chrono::steady_clock::now();
         const std::string filePath(path);
 
         tinygltf::Model    model;
         tinygltf::TinyGLTF loader;
         std::string        err;
         std::string        warn;
+
+        if (!options.loadTextures)
+            loader.SetImageLoader([](tinygltf::Image*, int, std::string*, std::string*, int, int,
+                                     const unsigned char*, int, void*) { return true; }, nullptr);
 
         const bool isBinary = filePath.size() >= 4 && filePath.compare(filePath.size() - 4, 4, ".glb") == 0;
         const bool ok       = isBinary ? loader.LoadBinaryFromFile(&model, &err, &warn, filePath) :
@@ -340,6 +354,7 @@ namespace vrf
             LogWarning("LoadGltf: {}", warn);
         if (!ok)
             return MakeError("LoadGltf failed: " + (err.empty() ? std::string("unknown error") : err));
+        const auto parsed = std::chrono::steady_clock::now();
 
         out      = Mesh {};
         out.name = filePath;
@@ -363,7 +378,7 @@ namespace vrf
         if (options.loadTextures)
         {
             out.textures.reserve(model.images.size());
-            for (const tinygltf::Image& image : model.images)
+            for (tinygltf::Image& image : model.images)
             {
                 Texture texture;
                 texture.name        = image.name;
@@ -378,13 +393,14 @@ namespace vrf
                 if (!image.image.empty() && image.width > 0 && image.height > 0)
                 {
                     const size_t pixelCount = static_cast<size_t>(image.width) * image.height;
-                    texture.data.resize(pixelCount * 4);
                     if (image.component == 4)
                     {
-                        std::memcpy(texture.data.data(), image.image.data(), pixelCount * 4);
+                        texture.data = std::move(image.image);
+                        texture.data.resize(pixelCount * 4);
                     }
                     else
                     {
+                        texture.data.resize(pixelCount * 4);
                         const int comp = image.component;
                         for (size_t i = 0; i < pixelCount; ++i)
                         {
@@ -396,12 +412,18 @@ namespace vrf
                             texture.data[i * 4 + 2] = b;
                             texture.data[i * 4 + 3] = 255;
                         }
+                        std::vector<unsigned char>().swap(image.image);
                     }
                     GenerateMipChain(texture); // shared mip chain -> raster/RT minification match
                 }
                 out.textures.push_back(std::move(texture));
             }
         }
+
+        const auto texturesReady = std::chrono::steady_clock::now();
+        LogInfo("LoadGltf: CPU parse/image decode {} ms, texture conversion/mips {} ms ({})",
+                std::chrono::duration<double, std::milli>(parsed - started).count(),
+                std::chrono::duration<double, std::milli>(texturesReady - parsed).count(), filePath);
 
         // ---- materials (routed to the shading model the glTF actually describes) ----
         out.materials.reserve(model.materials.size());
