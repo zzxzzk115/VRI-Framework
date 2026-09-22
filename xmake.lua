@@ -63,6 +63,10 @@ includes("external")
 -- include source
 includes("source")
 
+if has_config("vrf_build_benchmarks") then
+    includes("tools")
+end
+
 -- include tests
 if has_config("vrf_build_tests") then
     includes("tests")

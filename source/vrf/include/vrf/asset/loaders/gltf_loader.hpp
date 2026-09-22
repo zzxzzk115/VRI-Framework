@@ -3,7 +3,7 @@
  *
  * Extracts POSITION / NORMAL / TANGENT / TEXCOORD_0 / COLOR_0, indices, PBR
  * metallic-roughness materials, and decoded textures. Triangle primitives only;
- * node transforms are not baked (primitives are flattened in local space).
+ * node transforms are baked while flattening the scene.
  */
 #pragma once
 

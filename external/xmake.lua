@@ -46,10 +46,16 @@ add_requires("stb")
 add_requires("tinyobjloader")
 add_requires("tinygltf")
 
--- libktx (opt-in): pulls a heavier CMake/astc-encoder/zstd chain. Shared by the KTX2
--- texture loader and the asset cache's BC7 bake, which uses its UASTC encoder.
-if has_config("vrf_loader_ktx2") or has_config("vrf_bake_bc7") then
+-- Source-content keys for the shared derived cache (header-only use).
+add_requires("xxhash")
+
+-- libktx is only needed for KTX2 loading; BC7 baking encodes directly.
+if has_config("vrf_loader_ktx2") or has_config("vrf_build_benchmarks") then
     add_requires("ktx", {configs = {ktx1 = true, ktx2 = true, shared = false}})
+end
+if has_config("vrf_bake_bc7") and has_config("vrf_bake_bc7_simd") and
+   (is_arch("x86_64", "x64") and is_plat("windows", "linux", "macosx")) then
+    add_requires("ispc 1.28.2", {host = true})
 end
 
 -- Draco decompression (opt-in): tinygltf decodes KHR_draco_mesh_compression when linked with draco.
