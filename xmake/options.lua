@@ -7,6 +7,12 @@ option("vrf_build_examples") -- build examples?
     set_description("Enable VRI-Framework examples")
 option_end()
 
+option("vrf_build_benchmarks")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Build CPU asset-cache and BC7 comparison tools (adds libktx for the baseline)")
+option_end()
+
 option("vrf_build_tests") -- build tests?
     set_default(true)
     set_showmenu(true)
@@ -34,17 +40,17 @@ option("vrf_loader_ktx2")
     set_description("Enable the KTX2 texture loader (libktx)")
 option_end()
 
--- Block-compress baked textures (asset_cache). Uses libktx's UASTC encoder, transcoded to
--- BC7 at bake time so runtime stays a plain read. Same libktx dependency as the KTX2 loader;
--- without it the bake still works, storing textures uncompressed (~4x the disk).
---
--- ON by default: off keeps textures RGBA8 at runtime, which on a real scene thrashes VRAM from
--- ~28 ms to ~411 ms a frame - forgetting the flag reads as a broken build, not a missing option.
--- Turn off only to avoid pulling libktx.
+-- Direct BC7 encoding. x86-64 uses ISPC with SSE2/AVX2 runtime dispatch;
+-- other targets use the portable direct encoder. Neither path needs libktx.
 option("vrf_bake_bc7")
     set_default(true)
     set_showmenu(true)
-    set_description("Block-compress baked cache textures to BC7 (libktx UASTC encoder)")
+    set_description("Block-compress cached textures directly to BC7")
+option_end()
+option("vrf_bake_bc7_simd")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Use ISPC SIMD BC7 encoding on x86-64 (portable fallback elsewhere)")
 option_end()
 
 -- Optional Dear ImGui integration (Application onGui + RenderModule draw, via VRI's imgui

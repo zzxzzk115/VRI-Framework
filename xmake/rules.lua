@@ -68,3 +68,46 @@ rule("vulkansdk")
         end
     end)
 rule_end()
+-- Multi-target ISPC emits a dispatcher plus one object per ISA. All three must
+-- enter vrf's archive; the generic utils.ispc rule only adds the dispatcher.
+rule("vrf.bc7-ispc")
+    set_extensions(".ispc")
+    on_config(function (target)
+        target:add("includedirs", path.join(target:autogendir(), "bc7-ispc"))
+    end)
+    before_buildcmd_file(function (target, batchcmds, sourcefile, opt)
+        import("core.project.project")
+        import("lib.detect.find_tool")
+        local pkg = project.required_package("ispc")
+        local ispc = assert(find_tool("ispc", {paths = pkg and {pkg:installdir("bin")}}), "ispc not found")
+        local object = target:objectfile(sourcefile)
+        local headerdir = path.join(target:autogendir(), "bc7-ispc")
+        local header = path.join(headerdir, "bc7e_ispc.h")
+        local objects = {object}
+        for _, isa in ipairs({"sse2", "avx2"}) do
+            table.insert(objects, path.join(path.directory(object), path.basename(object) .. "_" .. isa .. path.extension(object)))
+        end
+        for _, file in ipairs(objects) do
+            table.insert(target:objectfiles(), file)
+        end
+        local flags = {"--target=sse2-i32x4,avx2-i32x8", "--arch=x86-64", "-O2", "--opt=disable-assertions"}
+        if target:is_plat("windows") then
+            table.insert(flags, "--target-os=windows")
+        elseif target:is_plat("macosx") then
+            table.insert(flags, "--target-os=macos")
+        else
+            table.insert(flags, "--target-os=linux")
+        end
+        if not target:is_plat("windows") then
+            table.insert(flags, "--pic")
+        end
+        table.join2(flags, {"-h", header, "-o", object, sourcefile})
+        batchcmds:show_progress(opt.progress, "${color.build.object}compiling.bc7-ispc %s", sourcefile)
+        batchcmds:mkdir(path.directory(object))
+        batchcmds:mkdir(headerdir)
+        batchcmds:vrunv(ispc.program, flags)
+        batchcmds:add_depfiles(sourcefile)
+        batchcmds:set_depmtime(os.mtime(object))
+        batchcmds:set_depcache(target:dependfile(object))
+    end)
+rule_end()

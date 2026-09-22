@@ -2,3 +2,6 @@
 # regardless of a contributor's core.autocrlf setting.
 *.sh            text eol=lf
 scripts/hooks/* text eol=lf
+
+# Preserve the vendored encoder sources byte-for-byte.
+external/bc7enc/* -whitespace linguist-vendored
