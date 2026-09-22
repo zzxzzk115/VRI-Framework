@@ -279,7 +279,8 @@ TEST_CASE("direct BC7 honors mip offsets and padded input rows")
         for (const auto& pixel : pixels)
         {
             CHECK(std::abs(int(pixel.r) - int(sub.mipLevel) * 64) <= 3);
-            CHECK(pixel.a == 255);
+            // Portable mode 6 shares endpoint p-bits with RGB, allowing 254 for opaque input.
+            CHECK(std::abs(int(pixel.a) - 255) <= 1);
         }
     }
 }
