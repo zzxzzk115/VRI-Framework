@@ -116,6 +116,10 @@ namespace vrf
         [[nodiscard]] Expected<ResolvedShader>
         Resolve(std::string_view shaderId, ShaderStage stage, const std::vector<ShaderKeyword>& keywords) const;
 
+        // For asset records that preserve the cooker's stable ID hash instead of its source path.
+        [[nodiscard]] Expected<ResolvedShader>
+        ResolveHash(uint64_t shaderIdHash, ShaderStage stage, const std::vector<ShaderKeyword>& keywords) const;
+
     private:
         struct Impl;
         std::unique_ptr<Impl> m_impl;
