@@ -27,6 +27,10 @@ TEST_CASE("FBX accepts invertible transforms across scales and rejects zero scal
                              "-1, 1, 1e13",
                              "1, 1, 1e200",
                              "1, 1, 1e-200",
+                             "1e103, 1e103, 1e103",
+                             "-1e103, 1e103, 1e103",
+                             "1e-110, 1e-110, 1e-110",
+                             "-1e-110, 1e-110, 1e-110",
                              "0, 1, 1"})
     {
         INFO(std::string(scale));
@@ -40,6 +44,20 @@ TEST_CASE("FBX accepts invertible transforms across scales and rejects zero scal
         const auto        offset = text.find(needle);
         REQUIRE(offset != std::string::npos);
         text.replace(offset, needle.size(), std::string("\"Lcl Scaling\", \"Lcl Scaling\", \"\", \"A\", ") + scale);
+        // Keep the transformed triangle at a useful size while the raw determinant
+        // overflows/underflows. Also exercise reflected winding in both regimes.
+        const std::string scaleText(scale);
+        if (scaleText.find("1e103") != std::string::npos || scaleText.find("1e-110") != std::string::npos)
+        {
+            const std::string vertices     = "Vertices: *9 { a: 0,0,0,100,0,0,0,100,0 }";
+            const auto        vertexOffset = text.find(vertices);
+            REQUIRE(vertexOffset != std::string::npos);
+            text.replace(vertexOffset,
+                         vertices.size(),
+                         scaleText.find("1e103") != std::string::npos ?
+                             "Vertices: *9 { a: 0,0,0,1e-101,0,0,0,1e-101,0 }" :
+                             "Vertices: *9 { a: 0,0,0,1e112,0,0,0,1e112,0 }");
+        }
         struct TemporaryFbx
         {
             std::filesystem::path path;

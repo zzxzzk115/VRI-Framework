@@ -10,6 +10,7 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "asset/derived_cache.hpp"
 #include "vrf/core/log.hpp"
 
 // The single STB_IMAGE_IMPLEMENTATION lives in image_loader.cpp; here we tell
@@ -86,6 +87,47 @@ namespace vrf
             tex.data         = std::move(out);
             tex.subresources = std::move(subs);
             tex.mipLevels    = mipCount;
+        }
+
+        Texture TextureFromImage(tinygltf::Image& image)
+        {
+            Texture texture;
+            texture.name        = image.name;
+            texture.width       = static_cast<uint32_t>(image.width);
+            texture.height      = static_cast<uint32_t>(image.height);
+            texture.depth       = 1;
+            texture.mipLevels   = 1;
+            texture.arrayLayers = 1;
+            texture.format      = VriFormat_RGBA8_UNORM;
+            texture.fileFormat  = TextureFileFormat::Unknown;
+
+            if (!image.image.empty() && image.width > 0 && image.height > 0)
+            {
+                const size_t pixelCount = static_cast<size_t>(image.width) * image.height;
+                texture.data.resize(pixelCount * 4);
+                if (image.component == 4)
+                {
+                    std::memcpy(texture.data.data(), image.image.data(), pixelCount * 4);
+                }
+                else
+                {
+                    const int comp = image.component;
+                    for (size_t i = 0; i < pixelCount; ++i)
+                    {
+                        const unsigned char r   = image.image[i * comp + 0];
+                        const unsigned char g   = comp > 1 ? image.image[i * comp + 1] : r;
+                        const unsigned char b   = comp > 2 ? image.image[i * comp + 2] : r;
+                        texture.data[i * 4 + 0] = r;
+                        texture.data[i * 4 + 1] = g;
+                        texture.data[i * 4 + 2] = b;
+                        texture.data[i * 4 + 3] = 255;
+                    }
+                }
+                // Release tinygltf's decoded copy before allocating mips/encoded data.
+                std::vector<unsigned char>().swap(image.image);
+                GenerateMipChain(texture); // shared mip chain -> raster/RT minification match
+            }
+            return texture;
         }
 
         // Read a vertex-attribute accessor into a flat float array; returns the component
@@ -324,7 +366,8 @@ namespace vrf
         }
     } // namespace
 
-    Expected<void> LoadGltf(std::string_view path, Mesh& out, const GltfImportOptions& options)
+    static Expected<void>
+    LoadGltfImpl(std::string_view path, Mesh& out, const GltfImportOptions& options, detail::DerivedCache* cache)
     {
         const std::string filePath(path);
 
@@ -332,6 +375,61 @@ namespace vrf
         tinygltf::TinyGLTF loader;
         std::string        err;
         std::string        warn;
+
+        if (!options.loadTextures)
+        {
+            loader.SetImageLoader(
+                [](tinygltf::Image*, int, std::string*, std::string*, int, int, const unsigned char*, int, void*) {
+                    return true;
+                },
+                nullptr);
+        }
+        else if (cache)
+        {
+            loader.SetImageLoader(
+                [](tinygltf::Image*     image,
+                   int                  index,
+                   std::string*         err,
+                   std::string*         warn,
+                   int                  width,
+                   int                  height,
+                   const unsigned char* bytes,
+                   int                  size,
+                   void*                context) {
+                    auto& cache = *static_cast<detail::DerivedCache*>(context);
+                    if (index < 0 || size < 0)
+                        return false;
+                    cache.imageKeys.resize(static_cast<size_t>(index) + 1);
+                    cache.images.resize(static_cast<size_t>(index) + 1);
+                    auto& key = cache.imageKeys[index];
+                    key       = cache.ImageKey({bytes, static_cast<size_t>(size)});
+                    auto hit  = cache.ReadTexture(key);
+                    if (hit && (!width || hit->width == static_cast<uint32_t>(width)) &&
+                        (!height || hit->height == static_cast<uint32_t>(height)))
+                    {
+                        image->width        = static_cast<int>(hit->width);
+                        image->height       = static_cast<int>(hit->height);
+                        image->component    = 4;
+                        image->bits         = 8;
+                        image->pixel_type   = TINYGLTF_COMPONENT_TYPE_UNSIGNED_BYTE;
+                        cache.images[index] = std::move(hit);
+                        if (cache.stats)
+                            ++cache.stats->textureHits;
+                        return true;
+                    }
+                    if (cache.stats)
+                        ++cache.stats->textureMisses;
+                    if (!tinygltf::LoadImageData(image, index, err, warn, width, height, bytes, size, nullptr))
+                        return false;
+                    // Bake while parsing this image, then release its decoded pixels. Retaining
+                    // every decoded RGBA image until the end can exceed RAM before encoding starts.
+                    auto texture = TextureFromImage(*image);
+                    cache.FinishTexture(key, texture);
+                    cache.images[index] = std::move(texture);
+                    return true;
+                },
+                cache);
+        }
 
         const bool isBinary = filePath.size() >= 4 && filePath.compare(filePath.size() - 4, 4, ".glb") == 0;
         const bool ok       = isBinary ? loader.LoadBinaryFromFile(&model, &err, &warn, filePath) :
@@ -363,42 +461,17 @@ namespace vrf
         if (options.loadTextures)
         {
             out.textures.reserve(model.images.size());
-            for (const tinygltf::Image& image : model.images)
+            for (size_t imageIndex = 0; imageIndex < model.images.size(); ++imageIndex)
             {
-                Texture texture;
-                texture.name        = image.name;
-                texture.width       = static_cast<uint32_t>(image.width);
-                texture.height      = static_cast<uint32_t>(image.height);
-                texture.depth       = 1;
-                texture.mipLevels   = 1;
-                texture.arrayLayers = 1;
-                texture.format      = VriFormat_RGBA8_UNORM;
-                texture.fileFormat  = TextureFileFormat::Unknown;
-
-                if (!image.image.empty() && image.width > 0 && image.height > 0)
+                auto& image = model.images[imageIndex];
+                if (cache && imageIndex < cache->images.size() && cache->images[imageIndex])
                 {
-                    const size_t pixelCount = static_cast<size_t>(image.width) * image.height;
-                    texture.data.resize(pixelCount * 4);
-                    if (image.component == 4)
-                    {
-                        std::memcpy(texture.data.data(), image.image.data(), pixelCount * 4);
-                    }
-                    else
-                    {
-                        const int comp = image.component;
-                        for (size_t i = 0; i < pixelCount; ++i)
-                        {
-                            const unsigned char r   = image.image[i * comp + 0];
-                            const unsigned char g   = comp > 1 ? image.image[i * comp + 1] : r;
-                            const unsigned char b   = comp > 2 ? image.image[i * comp + 2] : r;
-                            texture.data[i * 4 + 0] = r;
-                            texture.data[i * 4 + 1] = g;
-                            texture.data[i * 4 + 2] = b;
-                            texture.data[i * 4 + 3] = 255;
-                        }
-                    }
-                    GenerateMipChain(texture); // shared mip chain -> raster/RT minification match
+                    auto texture = std::move(*cache->images[imageIndex]);
+                    texture.name = image.name;
+                    out.textures.push_back(std::move(texture));
+                    continue;
                 }
+                auto texture = TextureFromImage(image);
                 out.textures.push_back(std::move(texture));
             }
         }
@@ -692,6 +765,19 @@ namespace vrf
 
         out.ComputeBounds();
         return {};
+    }
+
+    Expected<void> LoadGltf(std::string_view path, Mesh& out, const GltfImportOptions& options)
+    {
+        return LoadGltfImpl(path, out, options, nullptr);
+    }
+
+    Expected<void> detail::LoadGltfCachedTextures(std::string_view         path,
+                                                  Mesh&                    out,
+                                                  const GltfImportOptions& options,
+                                                  DerivedCache&            cache)
+    {
+        return LoadGltfImpl(path, out, options, &cache);
     }
 
     Expected<Mesh> LoadGltf(std::string_view path, const GltfImportOptions& options)

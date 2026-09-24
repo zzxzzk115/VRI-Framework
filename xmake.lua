@@ -2,7 +2,7 @@
 set_project("VRI-Framework")
 
 -- set project version
-set_version("0.1.1")
+set_version("0.1.2")
 
 -- set language version: C++ 23
 set_languages("cxx23")
@@ -62,6 +62,10 @@ includes("external")
 
 -- include source
 includes("source")
+
+if has_config("vrf_build_benchmarks") then
+    includes("tools")
+end
 
 -- include tests
 if has_config("vrf_build_tests") then

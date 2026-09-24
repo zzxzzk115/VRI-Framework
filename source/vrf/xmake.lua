@@ -39,14 +39,23 @@ target("vrf")
         add_defines("VRF_ENABLE_KTX2")
     end
 
-    -- Asset-cache BC7 bake (opt-in): libktx's UASTC encoder + BC7 transcoder, run offline.
+    add_packages("xxhash")
+    if has_config("vrf_loader_ktx2") then
+        add_packages("ktx")
+    end
     if has_config("vrf_bake_bc7") then
         add_defines("VRF_ENABLE_BAKE_BC7")
-    end
-
-    -- Both of the above are libktx.
-    if has_config("vrf_loader_ktx2") or has_config("vrf_bake_bc7") then
-        add_packages("ktx")
+        add_installfiles("../../external/bc7enc/LICENSE", "../../external/bc7enc/LICENSE-APACHE-2.0",
+                         "../../external/bc7enc/README.md", {prefixdir = "share/licenses/vrf/bc7enc"})
+        add_includedirs("../../external/bc7enc")
+        if has_config("vrf_bake_bc7_simd") and is_arch("x86_64", "x64") and is_plat("windows", "linux", "macosx") then
+            add_defines("VRF_BC7_ISPC")
+            add_packages("ispc")
+            add_rules("vrf.bc7-ispc")
+            add_files("../../external/bc7enc/bc7e.ispc")
+        else
+            add_files("../../external/bc7enc/bc7enc.cpp")
+        end
     end
 
     -- Draco glTF decompression (opt-in) via tinygltf's built-in integration.
