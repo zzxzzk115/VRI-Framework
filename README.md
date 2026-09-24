@@ -82,6 +82,8 @@ API surface — and every GPU object is move-only RAII.
   `FbxMaterialConvention::OrcaMetallicRoughness` is explicit, so ordinary Phong
   FBX files are not misinterpreted as ORCA materials. `LoadFbx` is called directly;
   the glTF/OBJ bake-cache dispatcher is unchanged.
+- [`LoadModelCached`](docs/asset_cache.md) shares generated tangents and textures by content;
+  direct SIMD BC7 encoding avoids the UASTC intermediate. Whole-mesh caching remains opt-in.
 - **3D Gaussian Splatting** via the vendored **GaussForge** (+ Niantic spz) stack — `LoadGaussianSplat`
   dispatches by extension across `.ply` / `.compressed.ply` / `.spz` / `.splat` / `.ksplat`
   (the `.sog` WebP-container format is trimmed out, matching the reference build).
@@ -134,6 +136,8 @@ xmake run vrf_example_triangle
 | `vrf_loader_ktx2` | `false` | KTX2 texture loader (libktx; heavy) |
 | `vrf_loader_draco` | `false` | Draco-compressed glTF |
 | `vrf_loader_fbx` | `false` | Static FBX via OpenFBX v0.9; includes explicit ORCA material convention |
+| `vrf_bake_bc7` / `vrf_bake_bc7_simd` | `true` | Direct BC7 baking / x86-64 SIMD encoding |
+| `vrf_build_benchmarks` | `false` | CPU cache and BC7 comparison tools |
 | `vrf_cook_shaders` | `false` | Re-cook `.vshlib` shader variants via `vshaderc` |
 | `vrf_build_examples` / `vrf_build_tests` | `true` | Build examples / tests |
 

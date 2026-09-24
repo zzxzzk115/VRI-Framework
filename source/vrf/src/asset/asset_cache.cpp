@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cstring>
 #include <filesystem>
 #include <fstream>
@@ -13,20 +14,8 @@
 #include "vrf/asset/loaders/obj_loader.hpp"
 #include "vrf/core/log.hpp"
 
-#if defined(VRF_ENABLE_BAKE_BC7)
-#include <ktx.h>
-#if defined(_WIN32)
-// NOMINMAX: windows.h defines min/max as macros, which breaks every std::max below.
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#elif defined(__APPLE__)
-#include <mach/mach.h>
-#include <mach/mach_host.h>
-#elif defined(__linux__)
-#include <unistd.h>
-#endif
-#endif
+#include "asset/derived_cache.hpp"
+#include "asset/texture_compress.hpp"
 
 namespace vrf
 {
@@ -37,7 +26,7 @@ namespace vrf
         // Bump when a loader changes what it produces from unchanged source bytes (transform
         // baking, attribute union, mip filter, ...). Existing caches then miss and re-bake
         // instead of feeding stale geometry into a changed pipeline.
-        constexpr uint32_t kLoaderVersion  = 1;
+        constexpr uint32_t kLoaderVersion  = 2;
         constexpr uint64_t kFnvOffsetBasis = 1469598103934665603ull;
         constexpr uint64_t kFnvPrime       = 1099511628211ull;
 
@@ -526,239 +515,6 @@ namespace vrf
             return true;
         }
 
-#if defined(VRF_ENABLE_BAKE_BC7)
-        // Block-compress one RGBA8 texture (with its mip chain) to BC7, in place.
-        //
-        // UASTC rather than ETC1S: UASTC is the visually-lossless mode, and it is designed to
-        // transcode into BC7 with almost no further loss. The transcode runs here, offline, so
-        // the cache stores hardware-decodable BC7 and startup stays a plain read - the whole
-        // point of the cache. Storing UASTC instead would be ~half the disk but would put a
-        // multi-second transcode back into every launch.
-        bool CompressTextureBc7(Texture& texture)
-        {
-            if (texture.compressed || texture.data.empty())
-                return false;
-            if (texture.format != VriFormat_RGBA8_UNORM && texture.format != VriFormat_RGBA8_SRGB)
-                return false;
-            // BC7 works on 4x4 blocks; libktx pads, but a texture smaller than one block is not
-            // worth a round trip.
-            if (texture.width < 4 || texture.height < 4 || texture.depth != 1 || texture.isCubemap)
-                return false;
-
-            // Tells the encoder how to weight its error metric. The output is BC7_UNORM either
-            // way - VRI exposes no BC7_SRGB - which is consistent with the glTF loader, whose
-            // images are all RGBA8_UNORM with the sRGB decode done in the shader.
-            const bool     srgb      = texture.format == VriFormat_RGBA8_SRGB;
-            const uint32_t mipLevels = std::max(texture.mipLevels, 1u);
-
-            ktxTextureCreateInfo info {};
-            info.vkFormat        = srgb ? 43u /* VK_FORMAT_R8G8B8A8_SRGB */ : 37u /* ..._UNORM */;
-            info.baseWidth       = texture.width;
-            info.baseHeight      = texture.height;
-            info.baseDepth       = 1;
-            info.numDimensions   = 2;
-            info.numLevels       = mipLevels;
-            info.numLayers       = 1;
-            info.numFaces        = 1;
-            info.isArray         = KTX_FALSE;
-            info.generateMipmaps = KTX_FALSE;
-
-            ktxTexture2* ktx = nullptr;
-            if (ktxTexture2_Create(&info, KTX_TEXTURE_CREATE_ALLOC_STORAGE, &ktx) != KTX_SUCCESS || ktx == nullptr)
-                return false;
-
-            // Feed each mip. Without an explicit subresource table the texture is a single
-            // mip-0 image, which is the stb fast path.
-            bool filled = true;
-            for (uint32_t level = 0; level < mipLevels && filled; ++level)
-            {
-                const uint8_t* src   = nullptr;
-                uint64_t       bytes = 0;
-                if (texture.subresources.empty())
-                {
-                    if (level != 0)
-                    {
-                        filled = false;
-                        break;
-                    }
-                    src   = texture.data.data();
-                    bytes = texture.data.size();
-                }
-                else
-                {
-                    const auto it = std::find_if(
-                        texture.subresources.begin(), texture.subresources.end(), [level](const TextureSubresource& s) {
-                            return s.mipLevel == level && s.arrayLayer == 0;
-                        });
-                    if (it == texture.subresources.end() || it->offset + it->size > texture.data.size())
-                    {
-                        filled = false;
-                        break;
-                    }
-                    src   = texture.data.data() + it->offset;
-                    bytes = it->size;
-                }
-                if (ktxTexture_SetImageFromMemory(ktxTexture(ktx), level, 0, 0, src, size_t(bytes)) != KTX_SUCCESS)
-                    filled = false;
-            }
-            if (!filled)
-            {
-                ktxTexture_Destroy(ktxTexture(ktx));
-                return false;
-            }
-
-            ktxBasisParams params {};
-            params.structSize = sizeof(params);
-            params.uastc      = KTX_TRUE;
-            // One libktx thread: the caller already runs one texture per hardware thread, so
-            // nesting a second pool would just oversubscribe.
-            params.threadCount = 1;
-
-            if (ktxTexture2_CompressBasisEx(ktx, &params) != KTX_SUCCESS ||
-                ktxTexture2_TranscodeBasis(ktx, KTX_TTF_BC7_RGBA, 0) != KTX_SUCCESS)
-            {
-                ktxTexture_Destroy(ktxTexture(ktx));
-                return false;
-            }
-
-            // Repack into our own flat blob + subresource table, so the reader stays libktx-free.
-            std::vector<uint8_t>            data;
-            std::vector<TextureSubresource> subresources;
-            data.reserve(ktxTexture_GetDataSize(ktxTexture(ktx)));
-            subresources.reserve(mipLevels);
-            for (uint32_t level = 0; level < mipLevels; ++level)
-            {
-                ktx_size_t offset = 0;
-                if (ktxTexture_GetImageOffset(ktxTexture(ktx), level, 0, 0, &offset) != KTX_SUCCESS)
-                {
-                    ktxTexture_Destroy(ktxTexture(ktx));
-                    return false;
-                }
-                const ktx_size_t size = ktxTexture_GetImageSize(ktxTexture(ktx), level);
-                const uint8_t*   src  = ktxTexture_GetData(ktxTexture(ktx)) + offset;
-
-                TextureSubresource sub {};
-                sub.mipLevel   = level;
-                sub.arrayLayer = 0;
-                sub.offset     = data.size();
-                sub.size       = size;
-                sub.width      = std::max(texture.width >> level, 1u);
-                sub.height     = std::max(texture.height >> level, 1u);
-                subresources.push_back(sub);
-                data.insert(data.end(), src, src + size);
-            }
-            ktxTexture_Destroy(ktxTexture(ktx));
-
-            texture.data         = std::move(data);
-            texture.subresources = std::move(subresources);
-            texture.mipLevels    = mipLevels;
-            texture.format       = VriFormat_BC7_UNORM;
-            texture.compressed   = true;
-            return true;
-        }
-
-        // 0 when the platform cannot say. Only bounds the pool below.
-        uint64_t AvailablePhysicalBytes()
-        {
-#if defined(_WIN32)
-            MEMORYSTATUSEX status {};
-            status.dwLength = sizeof(status);
-            return GlobalMemoryStatusEx(&status) ? uint64_t {status.ullAvailPhys} : 0ull;
-#elif defined(__linux__)
-            const long pages    = sysconf(_SC_AVPHYS_PAGES);
-            const long pageSize = sysconf(_SC_PAGE_SIZE);
-            return (pages > 0 && pageSize > 0) ? uint64_t(pages) * uint64_t(pageSize) : 0ull;
-#elif defined(__APPLE__)
-            vm_statistics64_data_t stats {};
-            mach_msg_type_number_t count = HOST_VM_INFO64_COUNT;
-            if (host_statistics64(mach_host_self(), HOST_VM_INFO64, reinterpret_cast<host_info64_t>(&stats), &count) !=
-                KERN_SUCCESS)
-                return 0ull;
-            vm_size_t pageSize = 0;
-            if (host_page_size(mach_host_self(), &pageSize) != KERN_SUCCESS)
-                return 0ull;
-            return uint64_t(stats.free_count + stats.inactive_count) * uint64_t(pageSize);
-#else
-            return 0ull;
-#endif
-        }
-
-        // One texture per thread, bounded by FREE MEMORY. Every decoded RGBA8 texture is already
-        // resident (GBs on a real scene) and each worker adds a ktx copy plus encoder scratch, so
-        // sizing by core count alone killed a 20-thread / 16 GB machine with bad_alloc mid-bake.
-        // Encoding is embarrassingly parallel: a smaller pool costs only wall clock.
-        void CompressTexturesBc7(Mesh& mesh)
-        {
-            if (mesh.textures.empty())
-                return;
-
-            const uint64_t      before = std::accumulate(mesh.textures.begin(),
-                                                    mesh.textures.end(),
-                                                    uint64_t {0},
-                                                    [](uint64_t sum, const Texture& t) { return sum + t.SizeBytes(); });
-            std::atomic<size_t> next {0};
-            std::atomic<size_t> converted {0};
-
-            unsigned workers = std::max(
-                1u,
-                std::min<unsigned>(std::thread::hardware_concurrency(), static_cast<unsigned>(mesh.textures.size())));
-            if (const uint64_t available = AvailablePhysicalBytes(); available != 0)
-            {
-                // Pessimistic on purpose: overestimating costs wall clock, underestimating loses
-                // the whole bake.
-                const uint64_t largest = std::accumulate(
-                    mesh.textures.begin(), mesh.textures.end(), uint64_t {0}, [](uint64_t m, const Texture& t) {
-                        return std::max(m, t.SizeBytes());
-                    });
-                const uint64_t perWorker = std::max<uint64_t>(largest * 4ull, 64ull * 1024 * 1024);
-                // Half of free: the rest absorbs the writer's buffers and whatever else is running.
-                const auto affordable = static_cast<unsigned>(std::max<uint64_t>(available / 2ull / perWorker, 1ull));
-                if (affordable < workers)
-                {
-                    LogInfo("asset cache: BC7 pool {} -> {} threads ({} MB free, ~{} MB per worker)",
-                            workers,
-                            affordable,
-                            available / (1024 * 1024),
-                            perWorker / (1024 * 1024));
-                    workers = affordable;
-                }
-            }
-            std::vector<std::thread> pool;
-            pool.reserve(workers);
-            for (unsigned w = 0; w < workers; ++w)
-            {
-                pool.emplace_back([&] {
-                    for (size_t i = next++; i < mesh.textures.size(); i = next++)
-                    {
-                        // Degrade to uncompressed (per-texture flag) rather than terminate().
-                        try
-                        {
-                            if (CompressTextureBc7(mesh.textures[i]))
-                                ++converted;
-                        }
-                        catch (const std::bad_alloc&)
-                        {
-                            LogWarning("asset cache: out of memory compressing texture {}, leaving it uncompressed", i);
-                        }
-                    }
-                });
-            }
-            for (std::thread& t : pool)
-                t.join();
-
-            const uint64_t after = std::accumulate(mesh.textures.begin(),
-                                                   mesh.textures.end(),
-                                                   uint64_t {0},
-                                                   [](uint64_t sum, const Texture& t) { return sum + t.SizeBytes(); });
-            LogInfo("asset cache: BC7 compressed {}/{} textures, {} MB -> {} MB",
-                    converted.load(),
-                    mesh.textures.size(),
-                    before / (1024 * 1024),
-                    after / (1024 * 1024));
-        }
-#else
-        void CompressTexturesBc7(Mesh&) {}
-#endif
     } // namespace
 
     Expected<void> WriteBakedMesh(const std::string_view cachePath, const std::string_view sourcePath, const Mesh& mesh)
@@ -911,6 +667,34 @@ namespace vrf
     {
         namespace fs = std::filesystem;
 
+        if (cache.stats)
+            *cache.stats = {};
+        if (cache.enabled && cache.mode == AssetCacheMode::Derived)
+        {
+            const auto           start = std::chrono::steady_clock::now();
+            AssetCacheStats      localStats;
+            detail::DerivedCache derived {cache};
+            if (!derived.stats)
+                derived.stats = &localStats;
+            LogInfo("asset cache: loading {} ({})", path, detail::Bc7EncoderName());
+            Mesh              mesh;
+            const std::string ext    = fs::path(path).extension().string();
+            const auto        loaded = (ext == ".obj" || ext == ".OBJ") ?
+                                           LoadObj(path, mesh) :
+                                           detail::LoadGltfCachedTextures(path, mesh, options, derived);
+            if (!loaded)
+                return loaded;
+            derived.Tangents(mesh);
+            LogInfo("asset cache: {:.2f}s, textures {}/{} hits, tangents {}, {:.1f} MiB written",
+                    std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count(),
+                    derived.stats->textureHits,
+                    derived.stats->textureHits + derived.stats->textureMisses,
+                    derived.stats->tangentHit ? "hit" : "source/generated",
+                    derived.stats->bytesWritten / (1024.0 * 1024.0));
+            out = std::move(mesh);
+            return {};
+        }
+
         const auto loadSource = [&]() -> Expected<void> {
             const std::string ext = fs::path(path).extension().string();
             if (ext == ".obj" || ext == ".OBJ")
@@ -918,7 +702,7 @@ namespace vrf
             return LoadGltf(path, out, options);
         };
 
-        if (!cache.enabled)
+        if (!cache.enabled || !options.loadTextures)
             return loadSource();
 
         const std::string cachePath = cache.cachePath.empty() ? std::string(path) + ".vrfcache" : cache.cachePath;
@@ -948,7 +732,7 @@ namespace vrf
             out.attributes |= VertexAttribute::Tangent;
         }
 
-        CompressTexturesBc7(out);
+        detail::CompressTexturesBc7(out);
 
         // A bake failure must not fail the load - the mesh in `out` is already good.
         if (auto baked = WriteBakedMesh(cachePath, path, out); !baked)

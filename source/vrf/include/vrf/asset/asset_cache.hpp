@@ -1,21 +1,8 @@
 /*
- * asset_cache.hpp - prebaked model cache.
- *
- * Parsing a source model is dominated by work whose result never changes: image decode,
- * mip generation, accessor decode, transform baking, tangent generation. This bakes the
- * finished `vrf::Mesh` - vertex streams, indices, submeshes, materials and textures with
- * their mip chains - into one blittable file next to the source, and reads it back on the
- * next run. A cold load of Intel Sponza + two extra models goes from minutes to the time
- * it takes to read the file.
- *
- * Deliberately narrow, unlike a general asset pipeline: there is no UUID registry, no pack
- * container, no virtual filesystem, no importer plugin surface. The only thing this format
- * knows how to represent is what vrf's own loaders already produce, and the only consumer
- * is LoadModelCached().
- *
- * The cache is a pure accelerator: deleting a .vrfcache file is always safe, and any
- * mismatch (format version, loader version, or a changed source file) silently falls back
- * to the real loader and re-bakes.
+ * Derived asset cache: generated tangents and shared, content-addressed textures.
+ * Source geometry and materials are parsed each load. Texture hits bypass image
+ * decoding, mip generation and BC7 encoding. FullMesh retains the legacy baked
+ * mesh path for callers that prefer minimum warm-load latency over disk space.
  */
 #pragma once
 
@@ -28,22 +15,41 @@
 
 namespace vrf
 {
+    enum class AssetCacheMode
+    {
+        Derived,
+        FullMesh
+    };
+
+    struct AssetCacheStats
+    {
+        uint32_t textureHits   = 0;
+        uint32_t textureMisses = 0;
+        bool     tangentHit    = false;
+        uint64_t bytesWritten  = 0;
+    };
+
     struct AssetCacheOptions
     {
         // Off entirely: LoadModelCached degrades to a plain loader call.
         bool enabled = true;
-        // Bake on a miss. Turn off for read-only asset trees or to measure a cold load.
+        // Write missing entries. Existing entries can still be read when false.
         bool write = true;
-        // Baked file path. Empty means "<modelPath>.vrfcache".
-        std::string cachePath;
+        // FullMesh file path. Empty means "<modelPath>.vrfcache".
+        std::string    cachePath;
+        AssetCacheMode mode = AssetCacheMode::Derived;
+        // Shared derived-cache root. Empty uses the platform user cache directory.
+        // Identical textures share entries across model paths and build directories.
+        std::string directory;
+        // Optional per-call counters; reset by LoadModelCached. Do not share between concurrent calls.
+        AssetCacheStats* stats = nullptr;
     };
 
     // Load a model through the bake cache.
     //
-    // Hit  -> reads the baked mesh, skipping the source parser entirely.
-    // Miss -> LoadGltf/LoadObj as usual, then (if `write`) bakes the result for next time.
-    //
-    // A bake failure is not a load failure: `out` is still valid and the error is logged.
+    // Derived -> load original geometry/materials and reuse generated data by content key.
+    // FullMesh -> read/write the complete baked mesh, skipping the parser on a hit.
+    // Cache failures are misses; they do not invalidate a successfully loaded model.
     [[nodiscard]] Expected<void> LoadModelCached(std::string_view         path,
                                                  Mesh&                    out,
                                                  const GltfImportOptions& options = {},

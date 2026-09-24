@@ -7,6 +7,11 @@ target("vrf-tests")
     add_packages("doctest")
 
     add_files("test_*.cpp")
+    add_files("../external/bc7enc/bc7decomp.cpp")
+    add_includedirs("../source/vrf/src", "../external/bc7enc")
+    if has_config("vrf_bake_bc7") then
+        add_defines("VRF_TEST_BC7")
+    end
     add_tests("default")
     if has_config("vrf_loader_fbx") then
         add_defines("VRF_TEST_FBX")
