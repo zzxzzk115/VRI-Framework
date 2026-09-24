@@ -45,6 +45,9 @@ end
 add_requires("stb")
 add_requires("tinyobjloader")
 add_requires("tinygltf")
+if has_config("vrf_loader_fbx") then
+    add_requires("openfbx v0.9")
+end
 
 -- Source-content keys for the shared derived cache (header-only use).
 add_requires("xxhash")

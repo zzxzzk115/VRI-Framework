@@ -39,6 +39,7 @@
 #include "vrf/asset/asset_cache.hpp"
 #include "vrf/asset/gaussian_splat.hpp"
 #include "vrf/asset/light.hpp"
+#include "vrf/asset/loaders/fbx_loader.hpp"
 #include "vrf/asset/loaders/gaussian_splat_loader.hpp"
 #include "vrf/asset/loaders/gltf_loader.hpp"
 #include "vrf/asset/loaders/image_loader.hpp"
