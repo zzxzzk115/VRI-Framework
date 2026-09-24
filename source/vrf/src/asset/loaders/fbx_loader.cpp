@@ -208,12 +208,25 @@ namespace vrf
             if (normals.count != positions.count || uvs.count != positions.count)
                 return MakeError("LoadFbx: static import requires per-corner normals and UVs: " +
                                  std::string(source->name));
-            const glm::dmat4 transform   = Matrix(source->getGlobalTransform()) * Matrix(source->getGeometricMatrix());
-            const double     determinant = glm::determinant(glm::dmat3(transform));
-            // An absolute epsilon rejects valid small scales; validate the transformed attributes below.
+            const glm::dmat4 transform = Matrix(source->getGlobalTransform()) * Matrix(source->getGeometricMatrix());
+            // Normalize each column before taking the determinant/inverse: the raw
+            // determinant can overflow or underflow even for a well-conditioned scale.
+            glm::dmat3 linear(transform);
+            glm::dvec3 columnScale;
+            for (int column = 0; column < 3; ++column)
+            {
+                const auto& v = linear[column];
+                if (!std::isfinite(v.x) || !std::isfinite(v.y) || !std::isfinite(v.z))
+                    return MakeError("LoadFbx: singular mesh transform");
+                columnScale[column] = std::max({std::abs(v.x), std::abs(v.y), std::abs(v.z)});
+                if (columnScale[column] == 0.0)
+                    return MakeError("LoadFbx: singular mesh transform");
+                linear[column] /= columnScale[column];
+            }
+            const double determinant = glm::determinant(linear);
             if (!std::isfinite(determinant) || determinant == 0.0)
                 return MakeError("LoadFbx: singular mesh transform");
-            const auto normalTransform = glm::transpose(glm::inverse(glm::dmat3(transform)));
+            const auto                                          normalTransform = glm::transpose(glm::inverse(linear));
             std::unordered_map<VertexKey, uint32_t, VertexHash> vertices;
             for (int partitionIndex = 0; partitionIndex < data.getPartitionCount(); ++partitionIndex)
             {
@@ -254,7 +267,7 @@ namespace vrf
                             const auto n      = normals.get(corner);
                             const auto uv     = uvs.get(corner);
                             const auto world  = transform * glm::dvec4(p.x, p.y, p.z, 1.0);
-                            const auto normal = normalTransform * glm::dvec3(n.x, n.y, n.z);
+                            const auto normal = normalTransform * (glm::dvec3(n.x, n.y, n.z) / columnScale);
                             // Inverse-transpose scaling can make valid normals extremely small or large.
                             const double normalLength = std::hypot(normal.x, normal.y, normal.z);
                             if (!std::isfinite(world.x + world.y + world.z) || !std::isfinite(normal.x) ||
