@@ -75,22 +75,14 @@ namespace vrf
         // The shader's declared bindings, owned by the library. Null only for a .vshlib cooked
         // before the reflection section existed.
         //
-        // IT IS NOT THIS VARIANT'S TABLE. vshadersystem v1.2.0 reflects the BASE variant (every
-        // permute keyword 0) and stores that same table on every variant of the shader, while the
-        // bytecode is specialized per variant. So a binding a keyword ADDS is missing from the
-        // reflection of the very variant that uses it, and a binding a keyword REMOVES is still
-        // listed. Deriving a descriptor-set layout from this for a non-base variant therefore
-        // truncates it, which is a first-frame device hang with no validation message. Use it to
-        // CROSS-CHECK a hand-written layout for the base configuration; do not use it to build one
-        // for a keyword-gated shader until the cooker emits reflection per variant.
-        // (Pinned by tests/test_shader_reflection.cpp, which fails when that changes.)
+        // v1.2.1 cooks carry per-variant reflection. Legacy v1.2.0 cooks repeat the base
+        // variant's table even when a keyword adds or removes a binding; upgrading the loader
+        // does not repair those files. Recook them before deriving keyword-dependent layouts.
+        // Both generations are covered by tests/test_shader_reflection.cpp.
         const ShaderReflection* reflection = nullptr;
 
-        // True when every permute keyword this shader declares resolved to 0 - i.e. exactly the
-        // variant `reflection` describes. Anything that cross-checks against the reflection must
-        // gate on this: on a non-base variant the table both over-reports (a binding the variant
-        // dropped) and under-reports (one a keyword added), so a check that ignores it produces
-        // findings that are all false and trains the reader to ignore real ones.
+        // True when every declared permute keyword resolved to 0. This identifies the base
+        // configuration; it does not indicate the cooker version or reflection accuracy.
         bool isBaseVariant = false;
     };
 

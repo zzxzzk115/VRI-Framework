@@ -32,12 +32,12 @@ add_requires("fg")
 -- shipping targets. (v1.0.1 already defaulted the matrix layout to column-major for glm.)
 -- v1.2.0 adds tessellation (hull/domain) entry-point cooking, which vrf::ShaderStage::
 -- TessControl/TessEval resolve against.
-add_requires("vshadersystem v1.2.0", {configs = {debug = is_mode("debug")}})
+add_requires("vshadersystem v1.2.1", {configs = {debug = is_mode("debug")}})
 
 -- Offline cook tool (the vshaderc CLI) - opt-in, to regenerate the committed .vshlib and to strip
 -- it to the compiled-in backends at build time.
 if has_config("vrf_cook_shaders") then
-    add_requires("vshadersystem~host v1.2.0", {kind = "binary"})
+    add_requires("vshadersystem~host v1.2.1", {kind = "binary"})
 end
 
 -- Minimal single-header asset loaders (used only inside the loader .cpp files).
