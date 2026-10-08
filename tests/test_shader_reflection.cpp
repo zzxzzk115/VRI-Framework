@@ -39,6 +39,7 @@ TEST_CASE("shader reflection: graphics metadata follows vertex layout variants")
         auto       vertex   = lib->Resolve("graphics_reflection", vrf::ShaderStage::Vertex, keywords);
         auto       fragment = lib->Resolve("graphics_reflection", vrf::ShaderStage::Fragment, keywords);
         REQUIRE(vertex.has_value());
+        CHECK(vertex->debugName.find("graphics_reflection:" + vertex->entryPoint + "#") == 0);
         REQUIRE(fragment.has_value());
         auto hashed =
             lib->ResolveHash(vshadersystem::shader_id_hash("graphics_reflection"), vrf::ShaderStage::Vertex, keywords);

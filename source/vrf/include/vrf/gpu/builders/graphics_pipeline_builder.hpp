@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <vri/vri.h>
@@ -39,6 +40,12 @@ namespace vrf
     class GraphicsPipelineBuilder
     {
     public:
+        GraphicsPipelineBuilder& SetDebugName(std::string name)
+        {
+            m_debugName = std::move(name);
+            return *this;
+        }
+
         GraphicsPipelineBuilder();
 
         GraphicsPipelineBuilder& SetPipelineLayout(VriPipelineLayout* layout)
@@ -172,6 +179,7 @@ namespace vrf
         [[nodiscard]] Expected<VriPipeline*> Build(RenderDevice& device) const;
 
     private:
+        std::string m_debugName;
         struct VariantShader
         {
             VriShaderStageBits stage;

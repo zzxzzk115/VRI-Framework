@@ -139,6 +139,7 @@ xmake run vrf_example_triangle
 | `vrf_bake_bc7` / `vrf_bake_bc7_simd` | `true` | Direct BC7 baking / x86-64 SIMD encoding |
 | `vrf_build_benchmarks` | `false` | CPU cache and BC7 comparison tools |
 | `vrf_cook_shaders` | `false` | Re-cook `.vshlib` shader variants via `vshaderc` |
+| `vrf_shader_debug_info` | `true` | Embed shader source/line metadata when re-cooking, including Release |
 | `vrf_build_examples` / `vrf_build_tests` | `true` | Build examples / tests |
 
 Backend and window are also selectable at runtime:
@@ -174,3 +175,21 @@ tests/        doctest suite (GPU cases self-skip without a device)
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+## Nsight / RenderDoc annotations in Release
+
+`GpuProfiler::BeginZone` / `EndZone` emit nested VRI tool markers in Debug and
+Release, independently of timestamp availability and query capacity.
+`GpuProfiler::Create(device, framesInFlight, maxZones, false)` disables timestamps
+while keeping markers. `Enabled()` reports timestamp collection only; call zone
+methods unconditionally when you want annotations. `GpuDebugGroup` provides a
+standalone RAII marker with no profiler or timestamp allocation.
+
+Pipeline builders accept `SetDebugName("pass / variant")`; `ResolvedShader::debugName`
+provides a shader ID, entry point and variant hash. Transient textures and
+buffers also receive stable shape-based names. VRI 0.1.18 sends these annotations
+to Vulkan without requiring validation. Shader source profiling separately needs
+a library cooked with vshaderc 1.3.0 `--debug-info`; use `--optimize` if high Slang
+optimization is desired. C++ Release mode and validation do not control shader
+debug metadata. Set `--vrf_cook_shaders=y` to regenerate the example libraries;
+`--vrf_shader_debug_info=n` opts out of embedding source metadata.

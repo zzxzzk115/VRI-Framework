@@ -4,6 +4,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <vri/vri.h>
@@ -17,6 +19,12 @@ namespace vrf
     class PipelineLayoutBuilder
     {
     public:
+        PipelineLayoutBuilder& SetDebugName(std::string name)
+        {
+            m_debugName = std::move(name);
+            return *this;
+        }
+
         PipelineLayoutBuilder& SetShaderStages(VriShaderStageFlags stages)
         {
             m_shaderStages = stages;
@@ -39,6 +47,7 @@ namespace vrf
         [[nodiscard]] Expected<VriPipelineLayout*> Build(RenderDevice& device) const;
 
     private:
+        std::string m_debugName;
         struct SetEntry
         {
             uint32_t                            registerSpace = 0;

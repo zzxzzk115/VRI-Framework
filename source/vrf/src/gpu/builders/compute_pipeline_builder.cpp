@@ -43,6 +43,8 @@ namespace vrf
         const VriResult r        = device.Core().CreateComputePipeline(device.Handle(), &desc, &pipeline);
         if (r != VriResult_Success)
             return MakeError(r, "ComputePipelineBuilder::Build", "CreateComputePipeline failed");
+        if (!m_debugName.empty() && device.Core().SetDebugName)
+            device.Core().SetDebugName(pipeline, m_debugName.c_str());
         return pipeline;
     }
 } // namespace vrf

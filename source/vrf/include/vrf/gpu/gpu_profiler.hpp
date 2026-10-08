@@ -13,8 +13,8 @@
  *
  * Results lag by framesInFlight frames (read back only after the slot's fence, which
  * FrameStream::Begin already waited on - so no extra sync). BeginFrame/EndFrame must be called
- * OUTSIDE any render pass (they reset/copy query pools). No-op (Enabled()==false) on devices
- * without timestamp queries, so callers never need to branch.
+ * OUTSIDE any render pass (they reset/copy query pools). Timestamp collection is disabled (Enabled()==false) on devices
+ * without timestamp queries; zone methods still emit tool markers.
  */
 #pragma once
 
@@ -49,10 +49,11 @@ namespace vrf
         GpuProfiler& operator=(GpuProfiler&&) noexcept;
 
         // Succeeds even when the device lacks timestamp queries - the result is a disabled
-        // profiler whose calls are all no-ops.
+        // timestamp profiler; tool markers are still emitted by BeginZone/EndZone.
         [[nodiscard]] static Expected<GpuProfiler>
-        Create(RenderDevice&, uint32_t framesInFlight, uint32_t maxZonesPerFrame = 64);
+        Create(RenderDevice&, uint32_t framesInFlight, uint32_t maxZonesPerFrame = 64, bool collectTimestamps = true);
 
+        // Reports timestamp collection only; markers work when this returns false.
         [[nodiscard]] bool Enabled() const noexcept { return m_device != nullptr; }
 
         // Reset this slot's pool and resolve the results captured the last time this slot ran.
@@ -85,6 +86,8 @@ namespace vrf
             bool                pending {false}; // has unresolved results copied by a prior submit
         };
 
+        RenderDevice*         m_markerDevice {nullptr};
+        uint32_t              m_markerDepth {0};
         RenderDevice*         m_device {nullptr};
         VriQueryInterface     m_query {};
         double                m_periodNs {0.0};
@@ -93,6 +96,34 @@ namespace vrf
         uint32_t              m_current {0};
         std::vector<uint32_t> m_stack; // open-zone record indices (UINT32_MAX = skipped/overflow)
         std::vector<Zone>     m_results;
+    };
+
+    // A tool marker independent of timestamp support, profiler creation and build mode.
+    // The device/interface and command buffer must outlive the scope.
+    class GpuDebugGroup
+    {
+    public:
+        GpuDebugGroup(RenderDevice& device, VriCommandBuffer* cmd, const char* name);
+        GpuDebugGroup(const VriCoreInterface& core, VriCommandBuffer* cmd, const char* name)
+        {
+            if (cmd && core.CmdBeginDebugGroup && core.CmdEndDebugGroup)
+            {
+                m_core = &core;
+                m_cmd  = cmd;
+                core.CmdBeginDebugGroup(cmd, name ? name : "");
+            }
+        }
+        ~GpuDebugGroup()
+        {
+            if (m_core)
+                m_core->CmdEndDebugGroup(m_cmd);
+        }
+        GpuDebugGroup(const GpuDebugGroup&)            = delete;
+        GpuDebugGroup& operator=(const GpuDebugGroup&) = delete;
+
+    private:
+        const VriCoreInterface* m_core {nullptr};
+        VriCommandBuffer*       m_cmd {nullptr};
     };
 
     // RAII scope for a GPU zone (mirrors core/profiling.hpp's CPU VRF_ZONE).
