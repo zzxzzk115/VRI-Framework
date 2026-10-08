@@ -294,6 +294,8 @@ namespace vrf
         auto result = ResolveHash(vsh::shader_id_hash(shaderId), stage, keywords);
         if (!result)
             result.error().message += ": " + std::string(shaderId);
+        else
+            result->debugName.replace(0, result->debugName.find(':'), shaderId);
         return result;
     }
 
@@ -347,15 +349,16 @@ namespace vrf
 
         const vsh::ShaderBinary& bin = m_impl->binaries[hit->second];
         ResolvedShader           out;
-        out.spirv         = bin.spirv.empty() ? nullptr : bin.spirv.data();
-        out.spirvSize     = bin.spirv.size() * sizeof(uint32_t);
-        out.wgsl          = bin.wgsl.empty() ? nullptr : bin.wgsl.data();
-        out.wgslSize      = bin.wgsl.size();
-        out.dxbc          = bin.dxbc.empty() ? nullptr : bin.dxbc.data();
-        out.dxbcSize      = bin.dxbc.size();
-        out.dxil          = bin.dxil.empty() ? nullptr : bin.dxil.data();
-        out.dxilSize      = bin.dxil.size();
-        out.entryPoint    = bin.entryPointName;
+        out.spirv      = bin.spirv.empty() ? nullptr : bin.spirv.data();
+        out.spirvSize  = bin.spirv.size() * sizeof(uint32_t);
+        out.wgsl       = bin.wgsl.empty() ? nullptr : bin.wgsl.data();
+        out.wgslSize   = bin.wgsl.size();
+        out.dxbc       = bin.dxbc.empty() ? nullptr : bin.dxbc.data();
+        out.dxbcSize   = bin.dxbc.size();
+        out.dxil       = bin.dxil.empty() ? nullptr : bin.dxil.data();
+        out.dxilSize   = bin.dxil.size();
+        out.entryPoint = bin.entryPointName;
+        out.debugName = std::to_string(bin.shaderIdHash) + ":" + out.entryPoint + "#" + std::to_string(bin.variantHash);
         out.reflection    = &m_impl->reflections[hit->second];
         out.isBaseVariant = isBase;
         return out;

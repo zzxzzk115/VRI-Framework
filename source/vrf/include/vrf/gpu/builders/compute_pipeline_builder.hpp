@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <utility>
 
 #include <vri/vri.h>
 
@@ -24,6 +25,12 @@ namespace vrf
     class ComputePipelineBuilder
     {
     public:
+        ComputePipelineBuilder& SetDebugName(std::string name)
+        {
+            m_debugName = std::move(name);
+            return *this;
+        }
+
         ComputePipelineBuilder() = default;
 
         ComputePipelineBuilder& SetPipelineLayout(VriPipelineLayout* layout)
@@ -55,6 +62,7 @@ namespace vrf
         [[nodiscard]] Expected<VriPipeline*> Build(RenderDevice& device) const;
 
     private:
+        std::string        m_debugName;
         VriPipelineLayout* m_layout   = nullptr;
         const void*        m_bytecode = nullptr;
         size_t             m_size     = 0;

@@ -18,7 +18,9 @@ if has_config("vrf_cook_shaders") then
             local outlib     = path.join(shaderRoot, "mesh.vshlib")
             -- Dev-time "all platforms": DXBC/DXIL need the Windows compilers; on other hosts they
             -- come out empty (best-effort). Release builds strip to the shipping targets.
-            os.vrunv(vshaderc, {"build", "--shader_root", shaderRoot, "-o", outlib, "--dxbc", "--dxil"})
+            local args = {"build", "--shader_root", shaderRoot, "-o", outlib, "--dxbc", "--dxil"}
+            if has_config("vrf_shader_debug_info") then table.insert(args, "--debug-info") end
+            os.vrunv(vshaderc, args)
             cprint("${green}[cook]${clear} regenerated shaders/mesh.vshlib (all backends)")
         end)
     rule_end()

@@ -313,6 +313,13 @@ namespace vrf::fg
             return nullptr;
         }
         m_buffers.resources.push_back(std::make_unique<Buffer>(std::move(*created)));
+        char name[64];
+        std::snprintf(name,
+                      sizeof name,
+                      "fg buffer %llu bytes type%d",
+                      static_cast<unsigned long long>(desc.dataSize()),
+                      static_cast<int>(desc.type));
+        m_device.Core().SetDebugName(m_buffers.resources.back()->Handle(), name);
         return m_buffers.resources.back().get();
     }
 

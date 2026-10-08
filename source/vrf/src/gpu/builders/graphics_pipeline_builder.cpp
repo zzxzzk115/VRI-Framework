@@ -119,6 +119,8 @@ namespace vrf
         const VriResult r        = device.Core().CreateGraphicsPipeline(device.Handle(), &desc, &pipeline);
         if (r != VriResult_Success)
             return MakeError(r, "GraphicsPipelineBuilder::Build", "CreateGraphicsPipeline failed");
+        if (!m_debugName.empty() && device.Core().SetDebugName)
+            device.Core().SetDebugName(pipeline, m_debugName.c_str());
         return pipeline;
     }
 } // namespace vrf

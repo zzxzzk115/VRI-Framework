@@ -142,3 +142,10 @@ option("vrf_backend_metal")
     set_showmenu(true)
     set_description("Enable the native Metal backend (vri package, macOS only)")
 option_end()
+
+-- Shader metadata is independent of host Debug/Release and does not disable optimization.
+option("vrf_shader_debug_info")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Embed shader source and debug info when cooking example shaders")
+option_end()

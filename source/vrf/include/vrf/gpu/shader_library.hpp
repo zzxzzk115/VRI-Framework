@@ -84,6 +84,8 @@ namespace vrf
         // True when every declared permute keyword resolved to 0. This identifies the base
         // configuration; it does not indicate the cooker version or reflection accuracy.
         bool isBaseVariant = false;
+
+        std::string debugName; // shader identity, entry point and cooked variant hash
     };
 
     // The keywords the framework derives from a vertex layout. These MUST match the keyword

@@ -15,7 +15,9 @@ if has_config("vrf_cook_shaders") then
             if is_host("windows") and not os.isfile(vshaderc) then vshaderc = vshaderc .. ".exe" end
             assert(os.isfile(vshaderc), "vshaderc host tool not found: " .. vshaderc)
             local shaderRoot = path.join(target:scriptdir(), "shaders")
-            os.vrunv(vshaderc, {"build", "--shader_root", shaderRoot, "-o", path.join(shaderRoot, "rt_inpaint.vshlib"), "--no-wgsl"})
+            local args = {"build", "--shader_root", shaderRoot, "-o", path.join(shaderRoot, "rt_inpaint.vshlib"), "--no-wgsl"}
+            if has_config("vrf_shader_debug_info") then table.insert(args, "--debug-info") end
+            os.vrunv(vshaderc, args)
             cprint("${green}[cook]${clear} regenerated shaders/rt_inpaint.vshlib")
         end)
     rule_end()

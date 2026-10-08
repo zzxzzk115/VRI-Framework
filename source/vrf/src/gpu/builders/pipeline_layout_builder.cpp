@@ -30,6 +30,8 @@ namespace vrf
         const VriResult    r      = device.Core().CreatePipelineLayout(device.Handle(), &desc, &layout);
         if (r != VriResult_Success)
             return MakeError(r, "PipelineLayoutBuilder::Build", "CreatePipelineLayout failed");
+        if (!m_debugName.empty() && device.Core().SetDebugName)
+            device.Core().SetDebugName(layout, m_debugName.c_str());
         return layout;
     }
 } // namespace vrf

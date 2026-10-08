@@ -14,7 +14,8 @@ local vri_configs = {
 -- tables, so a material-texture array is no longer capped at Metal's 128-per-stage limit.
 -- VriDeviceDesc grew bindlessTextureMaxNum / bindlessSamplerMaxNum at the END of the struct
 -- (additive; existing offsets unchanged), which is why this is a pin move and nothing else.
-add_requires("vri v0.1.17", {configs = vri_configs})
+-- v0.1.18 forwards Vulkan debug names and command labels even with validation disabled.
+add_requires("vri v0.1.18", {configs = vri_configs})
 
 -- glm: math types used across the framework's public API.
 add_requires("glm")
@@ -32,12 +33,13 @@ add_requires("fg")
 -- shipping targets. (v1.0.1 already defaulted the matrix layout to column-major for glm.)
 -- v1.2.0 adds tessellation (hull/domain) entry-point cooking, which vrf::ShaderStage::
 -- TessControl/TessEval resolve against.
-add_requires("vshadersystem v1.2.1", {configs = {debug = is_mode("debug")}})
+-- v1.3.0 exposes shader source/line metadata independently of CPU build mode.
+add_requires("vshadersystem v1.3.0", {configs = {debug = is_mode("debug")}})
 
 -- Offline cook tool (the vshaderc CLI) - opt-in, to regenerate the committed .vshlib and to strip
 -- it to the compiled-in backends at build time.
 if has_config("vrf_cook_shaders") then
-    add_requires("vshadersystem~host v1.2.1", {kind = "binary"})
+    add_requires("vshadersystem~host v1.3.0", {kind = "binary"})
 end
 
 -- Minimal single-header asset loaders (used only inside the loader .cpp files).

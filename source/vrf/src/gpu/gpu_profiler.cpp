@@ -1,5 +1,6 @@
 #include "vrf/gpu/gpu_profiler.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <utility>
 
@@ -12,13 +13,18 @@ namespace vrf
         constexpr uint32_t kUnset = 0xFFFFFFFFu;
     } // namespace
 
-    Expected<GpuProfiler> GpuProfiler::Create(RenderDevice& device, uint32_t framesInFlight, uint32_t maxZonesPerFrame)
+    Expected<GpuProfiler> GpuProfiler::Create(RenderDevice& device,
+                                              uint32_t      framesInFlight,
+                                              uint32_t      maxZonesPerFrame,
+                                              bool          collectTimestamps)
     {
         GpuProfiler out;
+        out.m_markerDevice = &device;
 
         // Disabled-but-valid on backends without timestamp queries (MoltenVK often reports none):
-        // callers use VRF_GPU_ZONE unconditionally and it compiles to no-ops at runtime.
-        if (device.Desc()->hasTimestampQueries == VRI_FALSE || device.Desc()->timestampPeriodNanoseconds <= 0.0f)
+        // callers use VRF_GPU_ZONE unconditionally and still receive tool markers.
+        if (!collectTimestamps || device.Desc()->hasTimestampQueries == VRI_FALSE ||
+            device.Desc()->timestampPeriodNanoseconds <= 0.0f)
         {
             return out;
         }
@@ -58,6 +64,8 @@ namespace vrf
 
     void GpuProfiler::Destroy() noexcept
     {
+        m_markerDevice = nullptr;
+        m_markerDepth  = 0;
         if (!m_device)
         {
             return;
@@ -78,6 +86,10 @@ namespace vrf
         m_device = nullptr;
     }
 
+    GpuDebugGroup::GpuDebugGroup(RenderDevice& device, VriCommandBuffer* cmd, const char* name) :
+        GpuDebugGroup(device.Core(), cmd, name)
+    {}
+
     GpuProfiler::~GpuProfiler() { Destroy(); }
 
     GpuProfiler::GpuProfiler(GpuProfiler&& other) noexcept { *this = std::move(other); }
@@ -87,14 +99,16 @@ namespace vrf
         if (this != &other)
         {
             Destroy();
-            m_device     = std::exchange(other.m_device, nullptr);
-            m_query      = other.m_query;
-            m_periodNs   = other.m_periodNs;
-            m_maxQueries = other.m_maxQueries;
-            m_slots      = std::move(other.m_slots);
-            m_current    = other.m_current;
-            m_stack      = std::move(other.m_stack);
-            m_results    = std::move(other.m_results);
+            m_markerDevice = std::exchange(other.m_markerDevice, nullptr);
+            m_markerDepth  = std::exchange(other.m_markerDepth, 0);
+            m_device       = std::exchange(other.m_device, nullptr);
+            m_query        = other.m_query;
+            m_periodNs     = other.m_periodNs;
+            m_maxQueries   = other.m_maxQueries;
+            m_slots        = std::move(other.m_slots);
+            m_current      = other.m_current;
+            m_stack        = std::move(other.m_stack);
+            m_results      = std::move(other.m_results);
         }
         return *this;
     }
@@ -143,25 +157,46 @@ namespace vrf
 
     void GpuProfiler::BeginZone(VriCommandBuffer* cmd, const char* name)
     {
+        if (!cmd)
+            return;
+        if (m_markerDevice)
+        {
+            const auto& core = m_markerDevice->Core();
+            if (core.CmdBeginDebugGroup && core.CmdEndDebugGroup)
+            {
+                core.CmdBeginDebugGroup(cmd, name ? name : "");
+                ++m_markerDepth;
+            }
+        }
         if (!m_device)
         {
             return;
         }
         Slot&          slot  = m_slots[m_current];
         const uint32_t depth = static_cast<uint32_t>(m_stack.size());
-        if (slot.next + 2 > m_maxQueries) // pool full - skip but keep the stack balanced
+        // Reserve the end timestamp of every already-open timed zone as well.
+        const auto openTimed = static_cast<uint32_t>(
+            std::count_if(m_stack.begin(), m_stack.end(), [](uint32_t index) { return index != kUnset; }));
+        if (slot.next + openTimed + 2 > m_maxQueries) // skip timing, retain the tool marker
         {
             m_stack.push_back(kUnset);
             return;
         }
         const uint32_t qBegin = slot.next++;
         m_query.CmdWriteTimestamp(cmd, slot.pool, qBegin);
-        slot.records.push_back({name, qBegin, kUnset, depth});
+        slot.records.push_back({name ? name : "", qBegin, kUnset, depth});
         m_stack.push_back(static_cast<uint32_t>(slot.records.size() - 1));
     }
 
     void GpuProfiler::EndZone(VriCommandBuffer* cmd)
     {
+        if (!cmd)
+            return;
+        if (m_markerDevice && m_markerDepth > 0)
+        {
+            m_markerDevice->Core().CmdEndDebugGroup(cmd);
+            --m_markerDepth;
+        }
         if (!m_device || m_stack.empty())
         {
             return;

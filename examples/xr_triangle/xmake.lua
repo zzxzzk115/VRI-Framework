@@ -17,7 +17,9 @@ if has_config("vrf_cook_shaders") then
 
             local shaderRoot = path.join(target:scriptdir(), "shaders")
             local outlib     = path.join(shaderRoot, "xr_triangle.vshlib")
-            os.vrunv(vshaderc, {"build", "--shader_root", shaderRoot, "-o", outlib, "--no-wgsl"})
+            local args = {"build", "--shader_root", shaderRoot, "-o", outlib, "--no-wgsl"}
+            if has_config("vrf_shader_debug_info") then table.insert(args, "--debug-info") end
+            os.vrunv(vshaderc, args)
             cprint("${green}[cook]${clear} regenerated shaders/xr_triangle.vshlib")
         end)
     rule_end()
