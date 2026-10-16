@@ -196,16 +196,27 @@ int main(int argc, char** argv)
     }
 
     // ---- window / device / swapchain / frames -----------------------------
-    vrf::WindowDesc windowDesc;
-    windowDesc.title  = "vrf gaussian_splat";
-    windowDesc.extent = kExtent;
-    auto windowResult = vrf::Window::Create(windowDesc);
-    if (!windowResult)
+    const bool  offline  = std::getenv("VRF_SPLAT_OFFLINE") != nullptr;
+    const char* shotPath = std::getenv("VRF_EXAMPLE_SCREENSHOT");
+    if (offline && !shotPath)
     {
-        std::fprintf(stderr, "[gaussian-splat] window: %s\n", windowResult.error().message.c_str());
+        std::fprintf(stderr, "[gaussian-splat] offline rendering requires VRF_EXAMPLE_SCREENSHOT\n");
         return 1;
     }
-    auto& window = *windowResult.value();
+    std::unique_ptr<vrf::Window> window;
+    if (!offline)
+    {
+        vrf::WindowDesc windowDesc;
+        windowDesc.title  = "vrf gaussian_splat";
+        windowDesc.extent = kExtent;
+        auto windowResult = vrf::Window::Create(windowDesc);
+        if (!windowResult)
+        {
+            std::fprintf(stderr, "[gaussian-splat] window: %s\n", windowResult.error().message.c_str());
+            return 1;
+        }
+        window = std::move(*windowResult);
+    }
 
     vrf::RenderDeviceDesc deviceDesc;
     deviceDesc.validation      = true;
@@ -238,16 +249,28 @@ int main(int argc, char** argv)
         std::printf("[gaussian-splat] VRF_SPLAT_MESH set but device has no mesh-shader support - using vertex path\n");
     std::printf("[gaussian-splat] geometry path: %s\n", useMesh ? "mesh shader" : "instanced quad (vertex)");
 
-    vrf::SwapchainDesc swapDesc;
-    swapDesc.window = window.Handle();
-    swapDesc.extent = kExtent;
-    auto swapResult = vrf::Swapchain::Create(device, swapDesc);
-    if (!swapResult)
+    vrf::Swapchain swapchain;
+    if (!offline)
     {
-        std::fprintf(stderr, "[gaussian-splat] swapchain: %s\n", swapResult.error().message.c_str());
-        return 1;
+        vrf::SwapchainDesc swapDesc;
+        swapDesc.window = window->Handle();
+        swapDesc.extent = kExtent;
+        auto swapResult = vrf::Swapchain::Create(device, swapDesc);
+        if (!swapResult)
+        {
+            std::fprintf(stderr, "[gaussian-splat] swapchain: %s\n", swapResult.error().message.c_str());
+            return 1;
+        }
+        swapchain = std::move(*swapResult);
+        std::printf("[gaussian-splat] window surface: %ux%u; render target: %ux%u\n",
+                    swapchain.Extent().width,
+                    swapchain.Extent().height,
+                    kExtent.width,
+                    kExtent.height);
     }
-    vrf::Swapchain& swapchain = *swapResult;
+    else
+        std::printf(
+            "[gaussian-splat] offline render target: %ux%u (no window or swapchain)\n", kExtent.width, kExtent.height);
 
     constexpr uint32_t kFramesInFlight = 2;
     auto               frameResult     = vrf::FrameStream::Create(device, kFramesInFlight);
@@ -552,6 +575,7 @@ int main(int argc, char** argv)
 
     // Tonemap: HDR -> swapchain (Reinhard + gamma), reusing the shared shader id.
     vrf::fg::PassPipeline presentPipeline;
+    if (!offline)
     {
         auto vs = shaders.Resolve("present", vrf::ShaderStage::Vertex, {});
         auto fs = shaders.Resolve("present", vrf::ShaderStage::Fragment, {});
@@ -730,11 +754,23 @@ int main(int argc, char** argv)
     bool sortValidated = false; // frame-0 GPU-vs-CPU check
 
     // ---- frame loop --------------------------------------------------------
-    const auto  start      = std::chrono::steady_clock::now();
-    uint64_t    frameCount = 0;
-    const bool  autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
-    const char* shotPath   = std::getenv("VRF_EXAMPLE_SCREENSHOT"); // headless PNG readback
-    uint32_t    lastFrame  = 0;
+    const auto start      = std::chrono::steady_clock::now();
+    uint64_t   frameCount = 0;
+    const bool autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
+    // Fixed camera settings are optional and apply only to framebuffer captures.
+    const auto captureFloat = [shotPath](const char* name, float fallback) {
+        const char* value = shotPath ? std::getenv(name) : nullptr;
+        if (!value)
+            return fallback;
+        char*       end    = nullptr;
+        const float parsed = std::strtof(value, &end);
+        return end != value && *end == '\0' && std::isfinite(parsed) ? parsed : fallback;
+    };
+    const float captureAngle    = captureFloat("VRF_SPLAT_CAPTURE_ANGLE", std::numeric_limits<float>::quiet_NaN());
+    const float cameraHeight    = captureFloat("VRF_SPLAT_CAPTURE_HEIGHT", 0.8f);
+    const float requestedRadius = captureFloat("VRF_SPLAT_CAPTURE_RADIUS", 3.2f);
+    const float cameraRadius    = requestedRadius > 0.0f ? requestedRadius : 3.2f;
+    uint32_t    lastFrame       = 0;
     // Covariance projection: EWA affine Jacobian (default) or 3DGUT unscented transform.
     const char*    projEnv = std::getenv("VRF_SPLAT_PROJECTION");
     const uint32_t projMode =
@@ -755,23 +791,26 @@ int main(int argc, char** argv)
     const glm::vec3 sceneCenter = 0.5f * (sceneMin + sceneMax);
     const float     sceneRadius = 0.5f * glm::length(sceneMax - sceneMin) + 1e-3f;
 
-    while (!window.ShouldClose())
+    while (offline ? frameCount < 1 : !window->ShouldClose())
     {
-        window.PollEvents();
-
-        if (window.Extent() != swapchain.Extent() && window.Extent().width > 0 && window.Extent().height > 0)
+        vrf::AcquireResult acquired {};
+        if (!offline)
         {
-            device.WaitIdle();
-            swapchain.Resize(window.Extent());
-            rebuildBackbuffers();
-        }
-        const auto acquired = swapchain.Acquire();
-        if (acquired.outOfDate)
-        {
-            device.WaitIdle();
-            swapchain.Resize(window.Extent());
-            rebuildBackbuffers();
-            continue;
+            window->PollEvents();
+            if (window->Extent() != swapchain.Extent() && !window->Extent().IsZero())
+            {
+                device.WaitIdle();
+                swapchain.Resize(window->Extent());
+                rebuildBackbuffers();
+            }
+            acquired = swapchain.Acquire();
+            if (acquired.outOfDate)
+            {
+                device.WaitIdle();
+                swapchain.Resize(window->Extent());
+                rebuildBackbuffers();
+                continue;
+            }
         }
 
         VriCommandBuffer* cmd           = frames.Begin();
@@ -783,15 +822,22 @@ int main(int argc, char** argv)
         vrf::fg::RenderContext renderContext {device, cmd, samplers, slotAllocator};
 
         const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - start).count();
-        const auto  extent  = swapchain.Extent();
-        const float aspect  = static_cast<float>(extent.width) / static_cast<float>(extent.height);
+        // Projection and Gaussian pixel radii must use the actual splat target,
+        // which can differ from a compositor-resized window surface.
+        const auto  extent = splatColorTex[frames.FrameIndex()].GetExtent();
+        const float aspect = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 
         // Orbit camera around the splat cloud.
-        const float     angle = seconds * 0.5f;
-        const glm::vec3 eye {std::cos(angle) * 3.2f, 0.8f, std::sin(angle) * 3.2f};
+        const float     angle = std::isfinite(captureAngle) ? captureAngle : seconds * 0.5f;
+        const glm::vec3 eye {std::cos(angle) * cameraRadius, cameraHeight, std::sin(angle) * cameraRadius};
         const glm::mat4 view = glm::lookAt(eye, glm::vec3 {0.0f}, glm::vec3 {0.0f, 1.0f, 0.0f});
         const float     fovY = glm::radians(50.0f);
-        glm::mat4       proj = glm::perspective(fovY, aspect, 0.05f, 100.0f);
+        // The cloud can include distant background splats beyond the old fixed 100-unit plane.
+        const float distToCenter = glm::length(eye - sceneCenter);
+        const float farPlane     = std::max(100.0f, distToCenter + sceneRadius + 1.0f);
+        glm::mat4   proj         = glm::perspective(fovY, aspect, 0.05f, farPlane);
+        if (frameCount == 0)
+            std::printf("[gaussian-splat] camera: aspect %.6f, near 0.05, far %.3f\n", aspect, farPlane);
         proj[1][1] *= -1.0f; // Vulkan Y-down clip space
 
         CameraBlock camBlock {};
@@ -811,8 +857,7 @@ int main(int argc, char** argv)
 
         // GPU back-to-front sort: 6-stage counting sort over quantized depth,
         // recorded into cmd before the graph's splat pass reads pf.indices.
-        const float distToCenter = glm::length(eye - sceneCenter);
-        SortParams  sp {};
+        SortParams sp {};
         sp.view      = view;
         sp.proj      = proj;
         sp.count     = splatCount;
@@ -839,9 +884,11 @@ int main(int argc, char** argv)
         // ---- graph: splat raster -> tonemap -------------------------------
         FrameGraph           graph;
         FrameGraphBlackboard blackboard;
-        auto                 backbufferId = vrf::fg::importTexture(graph, "Backbuffer", &backbuffers[acquired.index]);
-        lastFrame                         = frames.FrameIndex();
-        auto splatColorId                 = vrf::fg::importTexture(graph, "SplatColor", &splatColorTex[lastFrame]);
+        FrameGraphResource   backbufferId {};
+        if (!offline)
+            backbufferId = vrf::fg::importTexture(graph, "Backbuffer", &backbuffers[acquired.index]);
+        lastFrame         = frames.FrameIndex();
+        auto splatColorId = vrf::fg::importTexture(graph, "SplatColor", &splatColorTex[lastFrame]);
 
         struct SplatData
         {
@@ -850,6 +897,8 @@ int main(int argc, char** argv)
         const auto& splatPass = graph.addCallbackPass<SplatData>(
             "Splat",
             [&](FrameGraph::Builder& builder, SplatData& data) {
+                if (offline)
+                    builder.setSideEffect(); // readback consumes this target outside the graph
                 data.color = builder.write(splatColorId,
                                            vrf::fg::Attachment {.index       = 0,
                                                                 .imageAspect = vrf::fg::ImageAspect::Color,
@@ -884,33 +933,36 @@ int main(int argc, char** argv)
             });
         blackboard.add<SplatData>() = splatPass;
 
-        graph.addCallbackPass(
-            "Tonemap",
-            [&](FrameGraph::Builder& builder, auto&) {
-                builder.read(
-                    blackboard.get<SplatData>().color,
-                    vrf::fg::TextureRead {
-                        .binding     = {.location = {0, 0}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
-                        .type        = vrf::fg::TextureRead::Type::SampledImage,
-                        .imageAspect = vrf::fg::ImageAspect::Color,
-                    });
-                backbufferId = builder.write(
-                    backbufferId, vrf::fg::Attachment {.index = 0, .imageAspect = vrf::fg::ImageAspect::Color});
-                builder.setSideEffect();
-            },
-            [&](const auto&, FrameGraphPassResources&, void* ctx) {
-                auto& rc = *static_cast<vrf::fg::RenderContext*>(ctx);
-                rc.SetSampler(0, 1, samplers["linearClamp"]);
-                rc.RenderFullScreenPostProcess(presentPipeline);
-            });
+        if (!offline)
+            graph.addCallbackPass(
+                "Tonemap",
+                [&](FrameGraph::Builder& builder, auto&) {
+                    builder.read(
+                        blackboard.get<SplatData>().color,
+                        vrf::fg::TextureRead {
+                            .binding = {.location = {0, 0}, .pipelineStage = vrf::fg::PipelineStage::FragmentShader},
+                            .type    = vrf::fg::TextureRead::Type::SampledImage,
+                            .imageAspect = vrf::fg::ImageAspect::Color,
+                        });
+                    backbufferId = builder.write(
+                        backbufferId, vrf::fg::Attachment {.index = 0, .imageAspect = vrf::fg::ImageAspect::Color});
+                    builder.setSideEffect();
+                },
+                [&](const auto&, FrameGraphPassResources&, void* ctx) {
+                    auto& rc = *static_cast<vrf::fg::RenderContext*>(ctx);
+                    rc.SetSampler(0, 1, samplers["linearClamp"]);
+                    rc.RenderFullScreenPostProcess(presentPipeline);
+                });
 
         graph.compile();
         graph.execute(&renderContext, &transientResources);
 
-        renderContext.TransitionTexture(backbuffers[acquired.index],
-                                        {VriAccess_None, VriLayout_Present, VriPipelineStage_AllCommands});
+        if (!offline)
+            renderContext.TransitionTexture(backbuffers[acquired.index],
+                                            {VriAccess_None, VriLayout_Present, VriPipelineStage_AllCommands});
         frames.Submit();
-        swapchain.Present();
+        if (!offline)
+            swapchain.Present();
         ++frameCount;
 
         // Frame-0 validation: the GPU sort must produce back-to-front order.
@@ -1002,8 +1054,10 @@ int main(int argc, char** argv)
         core.DestroyDescriptor(sampler);
     for (const auto* p : {&splatPipeline, &presentPipeline})
     {
-        core.DestroyPipeline(p->pipeline);
-        core.DestroyPipelineLayout(p->layout->handle);
+        if (p->pipeline)
+            core.DestroyPipeline(p->pipeline);
+        if (p->layout)
+            core.DestroyPipelineLayout(p->layout->handle);
     }
     return 0;
 }
