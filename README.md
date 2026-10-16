@@ -24,9 +24,9 @@ API surface — and every GPU object is move-only RAII.
 
 ## Showcase
 
-![GPU Gaussian splatting of the hornedlizard SPZ fixture (786,233 splats).](docs/images/showcase.webp)
+![Offline GPU Gaussian splatting of the hornedlizard SPZ fixture (786,233 splats), with a fixed camera and a 1280×720 output.](docs/images/showcase.webp)
 
-GPU Gaussian splatting of the hornedlizard SPZ fixture (786,233 splats). [Capture and reproduction notes](docs/showcase.md).
+Offline GPU Gaussian splatting of the hornedlizard SPZ fixture (786,233 splats), with a fixed camera and a 1280×720 output. [Capture and reproduction notes](docs/showcase.md).
 
 ## Capabilities
 
