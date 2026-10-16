@@ -734,6 +734,17 @@ int main(int argc, char** argv)
     uint64_t    frameCount = 0;
     const bool  autoExit   = std::getenv("VRF_EXAMPLE_AUTO_EXIT") != nullptr;
     const char* shotPath   = std::getenv("VRF_EXAMPLE_SCREENSHOT"); // headless PNG readback
+    // Fixed camera settings are optional and apply only to framebuffer captures.
+    const auto captureFloat = [shotPath](const char* name, float fallback) {
+        const char* value = shotPath ? std::getenv(name) : nullptr;
+        if (!value)
+            return fallback;
+        char* end = nullptr;
+        const float parsed = std::strtof(value, &end);
+        return end != value && *end == '\0' && std::isfinite(parsed) ? parsed : fallback;
+    };
+    const float captureAngle = captureFloat("VRF_SPLAT_CAPTURE_ANGLE", std::numeric_limits<float>::quiet_NaN());
+    const float cameraHeight = captureFloat("VRF_SPLAT_CAPTURE_HEIGHT", 0.8f);
     uint32_t    lastFrame  = 0;
     // Covariance projection: EWA affine Jacobian (default) or 3DGUT unscented transform.
     const char*    projEnv = std::getenv("VRF_SPLAT_PROJECTION");
@@ -787,8 +798,8 @@ int main(int argc, char** argv)
         const float aspect  = static_cast<float>(extent.width) / static_cast<float>(extent.height);
 
         // Orbit camera around the splat cloud.
-        const float     angle = seconds * 0.5f;
-        const glm::vec3 eye {std::cos(angle) * 3.2f, 0.8f, std::sin(angle) * 3.2f};
+        const float     angle = std::isfinite(captureAngle) ? captureAngle : seconds * 0.5f;
+        const glm::vec3 eye {std::cos(angle) * 3.2f, cameraHeight, std::sin(angle) * 3.2f};
         const glm::mat4 view = glm::lookAt(eye, glm::vec3 {0.0f}, glm::vec3 {0.0f, 1.0f, 0.0f});
         const float     fovY = glm::radians(50.0f);
         glm::mat4       proj = glm::perspective(fovY, aspect, 0.05f, 100.0f);
