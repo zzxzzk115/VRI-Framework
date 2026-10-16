@@ -832,7 +832,12 @@ int main(int argc, char** argv)
         const glm::vec3 eye {std::cos(angle) * cameraRadius, cameraHeight, std::sin(angle) * cameraRadius};
         const glm::mat4 view = glm::lookAt(eye, glm::vec3 {0.0f}, glm::vec3 {0.0f, 1.0f, 0.0f});
         const float     fovY = glm::radians(50.0f);
-        glm::mat4       proj = glm::perspective(fovY, aspect, 0.05f, 100.0f);
+        // The cloud can include distant background splats beyond the old fixed 100-unit plane.
+        const float distToCenter = glm::length(eye - sceneCenter);
+        const float farPlane     = std::max(100.0f, distToCenter + sceneRadius + 1.0f);
+        glm::mat4   proj         = glm::perspective(fovY, aspect, 0.05f, farPlane);
+        if (frameCount == 0)
+            std::printf("[gaussian-splat] camera: aspect %.6f, near 0.05, far %.3f\n", aspect, farPlane);
         proj[1][1] *= -1.0f; // Vulkan Y-down clip space
 
         CameraBlock camBlock {};
@@ -852,8 +857,7 @@ int main(int argc, char** argv)
 
         // GPU back-to-front sort: 6-stage counting sort over quantized depth,
         // recorded into cmd before the graph's splat pass reads pf.indices.
-        const float distToCenter = glm::length(eye - sceneCenter);
-        SortParams  sp {};
+        SortParams sp {};
         sp.view      = view;
         sp.proj      = proj;
         sp.count     = splatCount;

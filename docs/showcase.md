@@ -11,7 +11,7 @@ DISPLAY= WAYLAND_DISPLAY= VRF_SPLAT_OFFLINE=1 \
   xmake run vrf_example_gaussian_splat /path/to/vasset/resources/splats/hornedlizard.spz
 ```
 
-This renders one frame without creating a window or swapchain. The output is 1280×720; camera aspect ratio, focal length and Gaussian pixel radii use the actual offscreen target extent. Converting this PNG to WebP preserves its dimensions and adds no framing or retouching.
+This renders one frame without creating a window or swapchain. The output is 1280×720; camera aspect ratio, focal length and Gaussian pixel radii use the actual offscreen target extent. The far clipping plane is computed from the camera-to-scene-center distance plus the scene bounding radius and a margin; for this view it is 348.424, instead of the old fixed 100. Converting this PNG to WebP preserves its dimensions and adds no framing or retouching.
 
 The chosen camera has an orbit angle of 2.1 radians, height 0.65 and horizontal radius 1.8. These optional settings apply only when `VRF_EXAMPLE_SCREENSHOT` is supplied. Invalid values fall back to the normal defaults; nonpositive radii are rejected. Normal windowed operation remains available when `VRF_SPLAT_OFFLINE` is absent. Offline mode requires an output path.
 
@@ -20,3 +20,5 @@ Input: [`hornedlizard.spz` from vasset](https://github.com/zzxzzk115/vasset/blob
 Validation: native build; offline render with display environment variables cleared; windowed automatic-exit regression; 1280×720 output inspection. The existing CPU/GPU depth-bucket comparison reports nonzero inversions, so the render is a visual example rather than an exhaustive sorting correctness result.
 
 Capture comparison: expanding the frustum-center culling margin to include essentially all forward-facing splats changed the high-view result by only 0.156/255 mean absolute RGB intensity. EWA versus 3DGUT at the lower camera view differed by 0.215/255. Neither adjustment materially filled the peripheral background. The final image uses EWA and the lower camera; these observations do not establish whether remaining peripheral artifacts originate in the input reconstruction or the renderer.
+
+Far-plane regression: at the same camera, increasing the old fixed far plane from 100 to 10000 changed the render by 15.152/255 mean absolute RGB intensity and restored distant/background content. The scene-derived far plane differs from the 10000 reference by only 0.184/255. This isolates far clipping from the separate frustum-center culling and projection-mode comparisons above.
