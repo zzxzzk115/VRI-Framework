@@ -152,10 +152,10 @@ namespace
         const VriCoreInterface& core   = device.Core();
         VriBuffer*              buffer = nullptr;
         const VriBufferDesc     desc {
-            .size            = bytes,
-            .structureStride = structureStride,
-            .usage           = usage,
-            .memoryLocation  = VriMemoryLocation_HostUpload,
+                .size            = bytes,
+                .structureStride = structureStride,
+                .usage           = usage,
+                .memoryLocation  = VriMemoryLocation_HostUpload,
         };
         if (!vrf::Succeeded(core.CreateBuffer(device.Handle(), &desc, &buffer)))
             return nullptr;
@@ -331,10 +331,10 @@ int main(int argc, char** argv)
     // ---- GPU buffers -------------------------------------------------------
     // Splats: uploaded once (host-visible, read-only in the shader).
     VriBuffer*     splatBuffer = makeHostBuffer(device,
-                                                uint64_t {splatCount} * sizeof(vrf::GaussianSplatPoint),
-                                                VriBufferUsage_StorageBuffer,
-                                                sizeof(vrf::GaussianSplatPoint),
-                                                splat.splats.data());
+                                            uint64_t {splatCount} * sizeof(vrf::GaussianSplatPoint),
+                                            VriBufferUsage_StorageBuffer,
+                                            sizeof(vrf::GaussianSplatPoint),
+                                            splat.splats.data());
     VriDescriptor* splatView   = nullptr;
     {
         const VriBufferViewDesc v {.buffer = splatBuffer, .viewType = VriDescriptorType_StructuredBuffer};
@@ -551,7 +551,7 @@ int main(int argc, char** argv)
                                   .srcAlpha = VriBlendFactor_One,
                                   .dstAlpha = VriBlendFactor_OneMinusSrcAlpha,
                                   .alphaOp  = VriBlendOp_Add};
-        auto pipeline = vrf::GraphicsPipelineBuilder {}
+        auto               pipeline = vrf::GraphicsPipelineBuilder {}
                             .SetPipelineLayout(*layout)
                             .AddShader(VriShaderStage_Mesh, ms->spirv, ms->spirvSize, ms->entryPoint.c_str())
                             .AddShader(VriShaderStage_Fragment, fs->spirv, fs->spirvSize, fs->entryPoint.c_str())
@@ -586,15 +586,15 @@ int main(int argc, char** argv)
         }
         const Set                  tset {0,
                                          {
-                                             {.baseRegister   = 0,
+                            {.baseRegister   = 0,
                                               .descriptorNum  = 1,
                                               .descriptorType = VriDescriptorType_Texture,
                                               .shaderStages   = VriShaderStage_Fragment},
-                                             {.baseRegister   = 1,
+                            {.baseRegister   = 1,
                                               .descriptorNum  = 1,
                                               .descriptorType = VriDescriptorType_Sampler,
                                               .shaderStages   = VriShaderStage_Fragment},
-                                         }};
+                        }};
         vrf::PipelineLayoutBuilder lb;
         lb.SetShaderStages(VriShaderStage_AllGraphics);
         lb.AddDescriptorSet(tset.registerSpace, tset.ranges);

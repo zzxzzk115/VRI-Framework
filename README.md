@@ -26,7 +26,7 @@ API surface — and every GPU object is move-only RAII.
 
 ![Offline GPU Gaussian splatting of the hornedlizard SPZ fixture (786,233 splats), with a fixed camera and a 1280×720 output.](docs/images/showcase.webp)
 
-Offline GPU Gaussian splatting of the hornedlizard SPZ fixture (786,233 splats), with a fixed camera and a 1280×720 output. [Capture and reproduction notes](docs/showcase.md).
+Offline GPU Gaussian splatting of the hornedlizard SPZ fixture (786,233 splats), with a fixed camera and a 1280×720 output.
 
 ## Capabilities
 
@@ -160,6 +160,33 @@ VRF_WINDOW=glfw xmake run vrf_example_model_viewer                      # window
 `triangle` · `rt_triangle` · `xr_triangle` · `model_viewer` (OBJ/glTF) · `framegraph_deferred` ·
 `compute_saxpy` · `compute_rayquery` · `rt_inpaint` · `gaussian_splat` · `gaussian_rt`
 (run as `vrf_example_<name>`).
+
+### Offline Gaussian splat rendering
+
+Render a PLY, SPZ or SPLAT file directly to PNG without creating a window or swapchain:
+
+```sh
+xmake build -y -j4 vrf_example_gaussian_splat
+VRF_SPLAT_OFFLINE=1 VRF_EXAMPLE_SCREENSHOT=/tmp/splat.png \
+  VRF_SPLAT_CAPTURE_ANGLE=1.55 VRF_SPLAT_CAPTURE_HEIGHT=1.0 \
+  VRF_SPLAT_CAPTURE_RADIUS=1.85 \
+  xmake run vrf_example_gaussian_splat /path/to/model.spz
+```
+
+Offline mode requires `VRF_EXAMPLE_SCREENSHOT` and renders one 1280×720 frame. Omit
+`VRF_SPLAT_OFFLINE` for the interactive example. Projection and Gaussian pixel radii
+use the render-target extent; the far plane follows the scene bounds to retain distant splats.
+
+| Capture setting | Meaning | Default |
+| --- | --- | --- |
+| `VRF_SPLAT_CAPTURE_ANGLE` | Orbit angle in radians | Animated orbit |
+| `VRF_SPLAT_CAPTURE_HEIGHT` | Camera height | `0.8` |
+| `VRF_SPLAT_CAPTURE_RADIUS` | Horizontal orbit radius | `3.2` |
+
+Camera overrides apply when a screenshot path is set. Invalid values use the defaults;
+the radius must be positive. The screenshot above uses the
+[`hornedlizard.spz` sample from vasset](https://github.com/zzxzzk115/vasset/blob/master/resources/splats/hornedlizard.spz).
+
 
 ## Layout
 
